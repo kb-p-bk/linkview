@@ -113,16 +113,23 @@ class BackupRepositoryImpl @Inject constructor(
                 }
 
                 val now = System.currentTimeMillis()
+                val titleToIdMap = mutableMapOf<String, String>()
+                val processedTitles = mutableSetOf<String>()
+
+                // Pass 1: Upsert all explicitly declared cards in envelope first
                 for (card in envelope.cards) {
                     val cardTitle = card.title.trim()
                     if (cardTitle.isEmpty()) continue
 
+                    val lowerTitle = cardTitle.lowercase()
                     val existingCard = cardDao.getCardByExactTitle(cardTitle)
                     val cardId = when {
                         card.id.isNotBlank() -> card.id
-                        existingCard != null && mode == ImportMode.MERGE -> existingCard.id
+                        existingCard != null -> existingCard.id
+                        titleToIdMap.containsKey(lowerTitle) -> titleToIdMap[lowerTitle]!!
                         else -> UUID.randomUUID().toString()
                     }
+                    titleToIdMap[lowerTitle] = cardId
 
                     val createdAt = if (card.createdAt > 0L) card.createdAt else (existingCard?.createdAt ?: now)
                     val domainCard = Card(
@@ -134,7 +141,9 @@ class BackupRepositoryImpl @Inject constructor(
                         updatedAt = now
                     )
                     cardDao.upsertCard(CardEntity.fromDomain(domainCard))
-                    cardsImported++
+                    if (processedTitles.add(lowerTitle)) {
+                        cardsImported++
+                    }
 
                     // Sync tags
                     cardDao.deleteCardTagsForCard(cardId)
@@ -146,6 +155,13 @@ class BackupRepositoryImpl @Inject constructor(
                     if (mode == ImportMode.MERGE) {
                         contextUnitDao.deleteUnitsForCard(cardId)
                     }
+                }
+
+                // Pass 2: Insert context units and wire cross-references
+                for (card in envelope.cards) {
+                    val cardTitle = card.title.trim()
+                    if (cardTitle.isEmpty()) continue
+                    val cardId = titleToIdMap[cardTitle.lowercase()] ?: card.id.ifBlank { null } ?: continue
 
                     // Support both structured contextUnits and AI-friendly units: List<String>
                     val rawUnits = when {
@@ -181,32 +197,37 @@ class BackupRepositoryImpl @Inject constructor(
                             val extracted = MentionTokenizer.extractReferences(unit.rawText)
                             val allRefs = (extracted + unit.references).distinct()
                             for (targetRef in allRefs) {
-                                var targetCard = cardDao.getCardById(targetRef) ?: cardDao.getCardByExactTitle(targetRef)
+                                val cleanTarget = targetRef.trim()
+                                if (cleanTarget.isEmpty()) continue
+
+                                var targetCard = cardDao.getCardById(cleanTarget)
+                                    ?: cardDao.getCardByExactTitle(cleanTarget)
+                                    ?: titleToIdMap[cleanTarget.lowercase()]?.let { cardDao.getCardById(it) }
+
                                 if (targetCard == null) {
-                                    val cleanTarget = targetRef.trim()
-                                    if (cleanTarget.isNotEmpty()) {
-                                        val stubId = UUID.randomUUID().toString()
-                                        val stub = CardEntity(
-                                            id = stubId,
-                                            title = cleanTarget,
-                                            type = null,
-                                            tagsCsv = "",
-                                            createdAt = now,
-                                            updatedAt = now
-                                        )
-                                        cardDao.upsertCard(stub)
-                                        targetCard = stub
+                                    val stubId = UUID.randomUUID().toString()
+                                    val stub = CardEntity(
+                                        id = stubId,
+                                        title = cleanTarget,
+                                        type = null,
+                                        tagsCsv = "",
+                                        createdAt = now,
+                                        updatedAt = now
+                                    )
+                                    cardDao.upsertCard(stub)
+                                    titleToIdMap[cleanTarget.lowercase()] = stubId
+                                    targetCard = stub
+                                    if (processedTitles.add(cleanTarget.lowercase())) {
                                         cardsImported++
                                     }
                                 }
-                                if (targetCard != null) {
-                                    references.add(
-                                        UnitReferenceEntity(
-                                            unitId = unit.id,
-                                            targetCardId = targetCard.id
-                                        )
+
+                                references.add(
+                                    UnitReferenceEntity(
+                                        unitId = unit.id,
+                                        targetCardId = targetCard.id
                                     )
-                                }
+                                )
                             }
                         }
                         if (references.isNotEmpty()) {

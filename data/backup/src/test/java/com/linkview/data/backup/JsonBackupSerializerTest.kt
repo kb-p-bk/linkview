@@ -93,4 +93,34 @@ class JsonBackupSerializerTest {
         assertEquals(1, card.contextUnits.size)
         assertEquals("Unit raw text", card.contextUnits[0].rawText)
     }
+
+    @Test
+    fun `decodeFromString correctly parses multi-card collection with forward references`() {
+        val json = """
+            [
+              {
+                "title": "Panaetius",
+                "tags": ["Person"],
+                "units": [
+                  "Greek Stoic philosopher who taught @[Publius Rutilius Rufus]."
+                ]
+              },
+              {
+                "title": "Publius Rutilius Rufus",
+                "tags": ["Person"],
+                "units": [
+                  "Roman statesman, jurist, orator, and historian."
+                ]
+              }
+            ]
+        """.trimIndent()
+
+        val envelope = serializer.decodeFromString(json)
+
+        assertEquals(2, envelope.cards.size)
+        assertEquals("Panaetius", envelope.cards[0].title)
+        assertEquals("Publius Rutilius Rufus", envelope.cards[1].title)
+        assertEquals(1, envelope.cards[0].units.size)
+        assertEquals("Greek Stoic philosopher who taught @[Publius Rutilius Rufus].", envelope.cards[0].units[0])
+    }
 }
