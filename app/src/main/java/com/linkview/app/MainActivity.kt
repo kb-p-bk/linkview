@@ -218,8 +218,9 @@ private fun TabletResponsiveLayout(
                                 )
                             }
                             target.startsWith("editor_") -> {
+                                val editorCardId = target.removePrefix("editor_").ifEmpty { null }
                                 CardEditorScreen(
-                                    cardId = editingCardId!!.ifEmpty { null },
+                                    cardId = editorCardId,
                                     onNavigateBack = { editingCardId = null },
                                     onOpenExistingCard = { existingId ->
                                         jumpToCard(existingId)
@@ -227,8 +228,9 @@ private fun TabletResponsiveLayout(
                                 )
                             }
                             target.startsWith("detail_") -> {
+                                val detailCardId = target.removePrefix("detail_")
                                 CardDetailScreen(
-                                    cardId = activeCardId!!,
+                                    cardId = detailCardId,
                                     showBackButton = cardJumpHistory.isNotEmpty(),
                                     onClose = {
                                         activeCardId = null

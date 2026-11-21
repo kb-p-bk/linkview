@@ -253,7 +253,7 @@ fun CardEditorScreen(
                             viewModel.onTagInputChanged(it)
                             isTagDropdownOpen = it.isNotBlank()
                         },
-                        placeholder = { Text("Search & add tag...", maxLines = 1) },
+                        placeholder = { Text("Filter tag...", maxLines = 1) },
                         shape = RoundedCornerShape(24.dp),
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),

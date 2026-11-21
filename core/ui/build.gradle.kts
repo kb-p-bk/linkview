@@ -38,4 +38,6 @@ dependencies {
     implementation(libs.compose.adaptive.layout)
 
     debugImplementation(libs.compose.ui.tooling)
+
+    testImplementation(libs.junit5)
 }

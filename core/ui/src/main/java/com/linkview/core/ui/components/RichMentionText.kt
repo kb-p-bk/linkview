@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
@@ -38,22 +37,21 @@ fun RichMentionText(
     ) {
         var currentIndex = 0
         for (token in tokens) {
-            if (token.startIndex > currentIndex) {
-                val plainSegment = rawText.substring(currentIndex, token.startIndex)
+            val safeStart = token.startIndex.coerceIn(0, rawText.length)
+            if (safeStart > currentIndex) {
+                val plainSegment = rawText.substring(currentIndex, safeStart)
                 if (plainSegment.isNotEmpty()) {
                     Text(
                         text = parseMarkdownToAnnotatedString(plainSegment, codeBg),
-                        style = style,
-                        modifier = Modifier.align(Alignment.CenterVertically)
+                        style = style
                     )
                 }
             }
             MentionChip(
                 label = token.label,
-                onClick = { onCardClick(token.targetCardId) },
-                modifier = Modifier.align(Alignment.CenterVertically)
+                onClick = { onCardClick(token.targetCardId) }
             )
-            currentIndex = token.endIndex
+            currentIndex = token.endIndex.coerceIn(0, rawText.length)
         }
 
         if (currentIndex < rawText.length) {
@@ -61,8 +59,7 @@ fun RichMentionText(
             if (trailing.isNotEmpty()) {
                 Text(
                     text = parseMarkdownToAnnotatedString(trailing, codeBg),
-                    style = style,
-                    modifier = Modifier.align(Alignment.CenterVertically)
+                    style = style
                 )
             }
         }

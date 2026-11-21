@@ -190,7 +190,7 @@ class CardRepositoryImpl @Inject constructor(
                     }
                 }
                 if (references.isNotEmpty()) {
-                    unitReferenceDao.insertReferences(references)
+                    unitReferenceDao.insertReferences(references.distinct())
                 }
             }
         }

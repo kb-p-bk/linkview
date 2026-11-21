@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -154,7 +155,7 @@ fun CardsHeader(
                             onTagSearchQueryChanged(it)
                             isTagDropdownExpanded = it.isNotBlank()
                         },
-                        placeholder = { Text("Search & add tag...", maxLines = 1, style = MaterialTheme.typography.bodySmall) },
+                        placeholder = { Text("Filter tag...", maxLines = 1, style = MaterialTheme.typography.bodySmall) },
                         leadingIcon = { Icon(Icons.Default.Tag, contentDescription = null, modifier = Modifier.size(16.dp)) },
                         trailingIcon = {
                             if (uiState.tagSearchQuery.isNotEmpty()) {
@@ -168,7 +169,7 @@ fun CardsHeader(
                         },
                         shape = RoundedCornerShape(24.dp),
                         singleLine = true,
-                        modifier = Modifier.width(175.dp)
+                        modifier = Modifier.widthIn(min = 120.dp, max = 160.dp)
                     )
 
                     // Tag Autocomplete Dropdown
