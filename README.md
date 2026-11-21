@@ -20,16 +20,16 @@ Traditional note-taking applications organize information into long, monolithic 
 - Multi-Tag Filtering and AND-Queries: Assign multiple tags to cards with relational intersection search and dynamic tag autocompletion.
 - Duplicate Title Prevention: Enforces card title uniqueness with duplicate detection and an instant "Open" navigation shortcut.
 - Tablet-Optimized Split View: Responsive layout featuring a full-width search header and a 38-62 proportional split view between the card grid and card content on tablets and foldable devices.
-- AI-Friendly JSON Workflows: One-tap JSON copy dialog in card details and direct JSON pasting in the Backup screen for seamless interoperability with LLMs and AI agents.
+- Declarative JSON Data Exchange: Clean JSON dialog for copying, inspecting, and editing card JSON directly, plus bulk paste ingestion in the Backup screen.
 - Complete Offline Privacy: All cards, context units, and relation graphs are stored locally in private SQLite storage using Room. No external servers or network access required.
 
-## AI Integration and JSON Schemas
+## Declarative JSON Format and Data Exchange
 
-LinkView supports seamless data exchange with AI assistants without requiring the AI to hallucinate or manage internal database identifiers (UUIDs) or timestamps. The application automatically generates UUIDs, timestamps, and stub cards for any referenced targets.
+LinkView provides a human-readable, declarative JSON format for fast data exchange, backups, and scripted imports without requiring callers to generate internal database identifiers (UUIDs) or timestamps. The application automatically provisions UUIDs, timestamps, and stub cards for any referenced targets.
 
 ### 1. Single Card Schema
 
-When prompting an AI to generate or summarize a card, use the following clean JSON schema:
+Cards can be represented using this clean, human-readable schema:
 
 ```json
 {
@@ -45,7 +45,7 @@ When prompting an AI to generate or summarize a card, use the following clean JS
 
 ### 2. Multi-Card Collection Schema
 
-You can also export or paste an array of cards:
+Multiple cards can be grouped into an array for batch importing or backups:
 
 ```json
 [
@@ -68,10 +68,10 @@ You can also export or paste an array of cards:
 ]
 ```
 
-### AI Workflow Features
+### JSON Import, Export, and In-Place Editing
 
-- Copy Card JSON: Tap the code icon (`</>`) on any card's detail screen to view and copy its clean JSON representation to the clipboard.
-- Paste JSON Ingestion: Navigate to the Backup screen and tap "Paste JSON" to paste AI-generated JSON directly into LinkView.
+- View, Copy, and Edit Card JSON: Tap the code icon (`</>`) on any card's detail screen to inspect, copy, or directly edit its JSON representation. Saving changes in the dialog updates the card, its tags, and its context units in real time.
+- Paste JSON Ingestion: Navigate to the Backup screen and tap "Paste JSON" to paste raw card JSON or arrays of cards directly into LinkView.
 - Mention Syntax: Mentions in context units use the `@` or `@[Target Title]` format. If the target card does not yet exist, LinkView automatically creates a new stub card for it.
 
 ## Architecture
@@ -88,7 +88,7 @@ The project follows Clean Architecture and Android modularization best practices
 - data:repository: Implementations for card and search repositories with auto-stubbing support.
 - data:backup: JSON backup serializer and importer supporting polymorphic envelope, single card, and card array formats.
 - feature:cards: Card grid screen, full-width search header, and tag autocomplete.
-- feature:detail: Card detail view with styled section chips for Context and Extra Context, Markdown rendering, and JSON export.
+- feature:detail: Card detail view with styled section chips for Context and Extra Context, Markdown rendering, in-place JSON editor, and copy export.
 - feature:editor: Card editor, multi-tag input, context unit reordering (Up/Down), keyboard-safe @mention autocomplete, and duplicate validation.
 - feature:backup: Backup creation, JSON file restoration, and direct JSON paste ingestion.
 

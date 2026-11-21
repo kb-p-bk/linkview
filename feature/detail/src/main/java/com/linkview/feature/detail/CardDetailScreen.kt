@@ -23,13 +23,16 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.SubdirectoryArrowRight
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -38,10 +41,13 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import android.widget.Toast
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.layout.heightIn
@@ -57,7 +63,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.linkview.core.common.Result
 import com.linkview.core.ui.components.RichMentionText
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -181,6 +189,11 @@ fun CardDetailScreen(
                 }
             }
 
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = 4.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+            )
+
             // Context Section
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Surface(
@@ -288,14 +301,17 @@ fun CardDetailScreen(
             Spacer(modifier = Modifier.height(32.dp))
         }
 
-        // Card JSON view & copy dialog
+        // Card JSON view, copy & edit dialog
         if (showJsonDialog && cardWithContext != null) {
-            val jsonString = remember(cardWithContext) { formatCardToJson(cardWithContext) }
+            var editableJson by remember(cardWithContext) { mutableStateOf(formatCardToJson(cardWithContext)) }
+            var jsonErrorMessage by remember { mutableStateOf<String?>(null) }
+            var isSavingJson by remember { mutableStateOf(false) }
             val context = LocalContext.current
             val clipboardManager = LocalClipboardManager.current
+            val coroutineScope = rememberCoroutineScope()
 
             AlertDialog(
-                onDismissRequest = { showJsonDialog = false },
+                onDismissRequest = { if (!isSavingJson) showJsonDialog = false },
                 title = {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -305,7 +321,7 @@ fun CardDetailScreen(
                         Text("Card JSON", style = MaterialTheme.typography.titleLarge)
                         FilledTonalButton(
                             onClick = {
-                                clipboardManager.setText(AnnotatedString(jsonString))
+                                clipboardManager.setText(AnnotatedString(editableJson))
                                 Toast.makeText(context, "JSON copied to clipboard", Toast.LENGTH_SHORT).show()
                             },
                             shape = RoundedCornerShape(16.dp)
@@ -317,32 +333,75 @@ fun CardDetailScreen(
                     }
                 },
                 text = {
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 350.dp)
-                    ) {
-                        Box(
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = "You can edit this JSON directly or paste modified JSON below:",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        OutlinedTextField(
+                            value = editableJson,
+                            onValueChange = {
+                                editableJson = it
+                                jsonErrorMessage = null
+                            },
+                            textStyle = TextStyle(
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            ),
                             modifier = Modifier
-                                .verticalScroll(rememberScrollState())
-                                .padding(12.dp)
-                        ) {
-                            SelectionContainer {
-                                Text(
-                                    text = jsonString,
-                                    fontFamily = FontFamily.Monospace,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
+                                .fillMaxWidth()
+                                .heightIn(min = 200.dp, max = 360.dp),
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                        if (jsonErrorMessage != null) {
+                            Text(
+                                text = jsonErrorMessage ?: "",
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodySmall
+                            )
                         }
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { showJsonDialog = false }) {
-                        Text("Close")
+                    Button(
+                        onClick = {
+                            coroutineScope.launch {
+                                isSavingJson = true
+                                val result = viewModel.saveCardFromJson(cardWithContext.card.id, editableJson)
+                                isSavingJson = false
+                                when (result) {
+                                    is Result.Success -> {
+                                        showJsonDialog = false
+                                        Toast.makeText(context, "Card updated successfully", Toast.LENGTH_SHORT).show()
+                                    }
+                                    is Result.Error -> {
+                                        jsonErrorMessage = result.message ?: "Failed to save card JSON"
+                                    }
+                                    else -> Unit
+                                }
+                            }
+                        },
+                        enabled = !isSavingJson && editableJson.isNotBlank()
+                    ) {
+                        if (isSavingJson) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onPrimary
+                            )
+                        } else {
+                            Text("Save Changes")
+                        }
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { showJsonDialog = false },
+                        enabled = !isSavingJson
+                    ) {
+                        Text("Cancel")
                     }
                 }
             )
