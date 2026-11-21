@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SubdirectoryArrowRight
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -75,6 +76,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.linkview.core.common.Result
 import com.linkview.core.common.mention.MentionTokenizer
 import com.linkview.core.model.BacklinkItem
+import com.linkview.core.ui.components.CompactSearchBar
 import com.linkview.core.ui.components.ContextUnitEditorRow
 import com.linkview.core.ui.components.RichMentionText
 import kotlinx.coroutines.launch
@@ -102,6 +104,7 @@ fun CardDetailScreen(
     val clipboardManager = LocalClipboardManager.current
     var showJsonDialog by remember { mutableStateOf(false) }
     var selectedContextTab by remember(cardId) { mutableStateOf(ContextTab.CONTEXT) }
+    var searchQuery by rememberSaveable(cardId) { mutableStateOf("") }
 
     LaunchedEffect(cardId) {
         viewModel.loadCard(cardId)
@@ -234,6 +237,66 @@ fun CardDetailScreen(
                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
             )
 
+            // Search within card details (context & extra context)
+            CompactSearchBar(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                placeholderText = if (selectedContextTab == ContextTab.CONTEXT) "Search context notes..." else "Search extra context...",
+                modifier = Modifier.fillMaxWidth(),
+                leadingIcon = {
+                    Icon(
+                        Icons.Default.Search,
+                        contentDescription = "Search",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
+                    )
+                },
+                trailingIcon = {
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(
+                            onClick = { searchQuery = "" },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "Clear",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                }
+            )
+
+            val authoredUnitsWithIndex = remember(cardWithContext.authoredUnits) {
+                cardWithContext.authoredUnits.mapIndexed { index, unit -> index to unit }
+            }
+
+            val filteredAuthoredUnits = remember(authoredUnitsWithIndex, searchQuery) {
+                if (searchQuery.isBlank()) {
+                    authoredUnitsWithIndex
+                } else {
+                    val query = searchQuery.trim()
+                    authoredUnitsWithIndex.filter { (_, unit) ->
+                        unit.plainText.contains(query, ignoreCase = true) ||
+                        unit.rawText.contains(query, ignoreCase = true)
+                    }
+                }
+            }
+
+            val filteredIncomingBacklinks = remember(cardWithContext.incomingBacklinks, searchQuery) {
+                if (searchQuery.isBlank()) {
+                    cardWithContext.incomingBacklinks
+                } else {
+                    val query = searchQuery.trim()
+                    cardWithContext.incomingBacklinks.filter { backlink ->
+                        backlink.plainText.contains(query, ignoreCase = true) ||
+                        backlink.rawText.contains(query, ignoreCase = true) ||
+                        backlink.sourceCardTitle.contains(query, ignoreCase = true)
+                    }
+                }
+            }
+
             // Context / Extra Context Switcher Row with Copy All Icon
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -244,6 +307,12 @@ fun CardDetailScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    val contextCountLabel = if (searchQuery.isBlank()) {
+                        "${cardWithContext.authoredUnits.size}"
+                    } else {
+                        "${filteredAuthoredUnits.size}/${cardWithContext.authoredUnits.size}"
+                    }
+
                     // Context Tab Chip
                     Surface(
                         shape = RoundedCornerShape(16.dp),
@@ -255,7 +324,7 @@ fun CardDetailScreen(
                         modifier = Modifier.clickable { selectedContextTab = ContextTab.CONTEXT }
                     ) {
                         Text(
-                            text = "Context (${cardWithContext.authoredUnits.size})",
+                            text = "Context ($contextCountLabel)",
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = if (selectedContextTab == ContextTab.CONTEXT) FontWeight.Bold else FontWeight.Medium,
                             color = if (selectedContextTab == ContextTab.CONTEXT) {
@@ -265,6 +334,12 @@ fun CardDetailScreen(
                             },
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                         )
+                    }
+
+                    val extraCountLabel = if (searchQuery.isBlank()) {
+                        "${cardWithContext.incomingBacklinks.size}"
+                    } else {
+                        "${filteredIncomingBacklinks.size}/${cardWithContext.incomingBacklinks.size}"
                     }
 
                     // Extra Context Tab Chip
@@ -283,7 +358,7 @@ fun CardDetailScreen(
                         }
                     ) {
                         Text(
-                            text = "Extra Context (${cardWithContext.incomingBacklinks.size})",
+                            text = "Extra Context ($extraCountLabel)",
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = if (selectedContextTab == ContextTab.EXTRA_CONTEXT) FontWeight.Bold else FontWeight.Medium,
                             color = if (selectedContextTab == ContextTab.EXTRA_CONTEXT) {
@@ -300,24 +375,28 @@ fun CardDetailScreen(
                 IconButton(
                     onClick = {
                         if (selectedContextTab == ContextTab.CONTEXT) {
-                            if (cardWithContext.authoredUnits.isEmpty()) {
-                                Toast.makeText(context, "No context notes to copy", Toast.LENGTH_SHORT).show()
+                            if (filteredAuthoredUnits.isEmpty()) {
+                                val msg = if (searchQuery.isBlank()) "No context notes to copy" else "No matching context notes to copy"
+                                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                             } else {
-                                val fullText = cardWithContext.authoredUnits.joinToString("\n\n") {
-                                    MentionTokenizer.stripCardUuids(it.rawText)
+                                val fullText = filteredAuthoredUnits.joinToString("\n\n") { (_, u) ->
+                                    MentionTokenizer.stripCardUuids(u.rawText)
                                 }
                                 clipboardManager.setText(AnnotatedString(fullText))
-                                Toast.makeText(context, "Context copied to clipboard", Toast.LENGTH_SHORT).show()
+                                val msg = if (searchQuery.isBlank()) "Context copied to clipboard" else "Matching context copied to clipboard"
+                                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                             }
                         } else {
-                            if (cardWithContext.incomingBacklinks.isEmpty()) {
-                                Toast.makeText(context, "No extra context to copy", Toast.LENGTH_SHORT).show()
+                            if (filteredIncomingBacklinks.isEmpty()) {
+                                val msg = if (searchQuery.isBlank()) "No extra context to copy" else "No matching extra context to copy"
+                                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                             } else {
-                                val fullText = cardWithContext.incomingBacklinks.joinToString("\n\n") { backlink ->
+                                val fullText = filteredIncomingBacklinks.joinToString("\n\n") { backlink ->
                                     "From @${backlink.sourceCardTitle}:\n${MentionTokenizer.stripCardUuids(backlink.rawText)}"
                                 }
                                 clipboardManager.setText(AnnotatedString(fullText))
-                                Toast.makeText(context, "Extra context copied to clipboard", Toast.LENGTH_SHORT).show()
+                                val msg = if (searchQuery.isBlank()) "Extra context copied to clipboard" else "Matching extra context copied to clipboard"
+                                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                             }
                         }
                     },
@@ -341,11 +420,27 @@ fun CardDetailScreen(
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                    } else if (filteredAuthoredUnits.isEmpty()) {
+                        Text(
+                            text = "No context notes matching \"$searchQuery\".",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     } else {
                         val activeIndex = uiState.editingUnitIndex
                         if (activeIndex != null && uiState.editableUnits.isNotEmpty()) {
                             // When editing a specific unit: render editable row for that unit, read cards for others
-                            uiState.editableUnits.forEachIndexed { index, editableUnit ->
+                            val editableUnitsWithIndex = uiState.editableUnits.mapIndexed { idx, u -> idx to u }
+                            val displayedEditableUnits = if (searchQuery.isBlank()) {
+                                editableUnitsWithIndex
+                            } else {
+                                val query = searchQuery.trim()
+                                editableUnitsWithIndex.filter { (idx, u) ->
+                                    idx == activeIndex || u.rawText.contains(query, ignoreCase = true)
+                                }
+                            }
+
+                            displayedEditableUnits.forEach { (index, editableUnit) ->
                                 if (index == activeIndex) {
                                     key(editableUnit.id) {
                                         ContextUnitEditorRow(
@@ -382,7 +477,7 @@ fun CardDetailScreen(
                             }
                         } else {
                             // All units in normal read mode
-                            cardWithContext.authoredUnits.forEachIndexed { index, unit ->
+                            filteredAuthoredUnits.forEach { (index, unit) ->
                                 ReadOnlyUnitCard(
                                     index = index,
                                     rawText = unit.rawText,
@@ -404,8 +499,14 @@ fun CardDetailScreen(
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                    } else if (filteredIncomingBacklinks.isEmpty()) {
+                        Text(
+                            text = "No extra context matching \"$searchQuery\".",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     } else {
-                        cardWithContext.incomingBacklinks.forEach { backlink ->
+                        filteredIncomingBacklinks.forEach { backlink ->
                             BacklinkUnitCard(
                                 backlink = backlink,
                                 onNavigateToCard = onNavigateToCard
