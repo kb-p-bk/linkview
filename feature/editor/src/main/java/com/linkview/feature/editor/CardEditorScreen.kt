@@ -5,6 +5,8 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -60,19 +62,26 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.PopupProperties
 import androidx.hilt.navigation.compose.hiltViewModel
+import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.linkview.core.model.Card
 
@@ -146,14 +155,27 @@ fun CardEditorScreen(
             return@Scaffold
         }
 
-        Column(
+        val scrollState = rememberScrollState()
+        val coroutineScope = rememberCoroutineScope()
+        var headerTopInScroll by remember { mutableFloatStateOf(0f) }
+        val isHeaderOutOfView by remember {
+            derivedStateOf {
+                headerTopInScroll > 0f && scrollState.value > headerTopInScroll
+            }
+        }
+
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(scrollState)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
             // Duplicate warning banner
             AnimatedVisibility(visible = uiState.duplicateCard != null) {
                 uiState.duplicateCard?.let { existing ->
@@ -329,9 +351,13 @@ fun CardEditorScreen(
                 }
             }
 
-            // Context Units Header
+            // Context Units In-line Header
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onGloballyPositioned { coordinates ->
+                        headerTopInScroll = coordinates.positionInParent().y
+                    },
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -344,7 +370,12 @@ fun CardEditorScreen(
                     color = MaterialTheme.colorScheme.secondaryContainer
                 ) {
                     IconButton(
-                        onClick = { viewModel.addContextUnit() },
+                        onClick = {
+                            viewModel.addContextUnit()
+                            coroutineScope.launch {
+                                scrollState.animateScrollTo(scrollState.maxValue)
+                            }
+                        },
                         modifier = Modifier.size(36.dp)
                     ) {
                         Icon(
@@ -379,9 +410,77 @@ fun CardEditorScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(32.dp))
+            // Additional bottom button to quickly add context unit at the end
+            OutlinedButton(
+                onClick = {
+                    viewModel.addContextUnit()
+                    coroutineScope.launch {
+                        scrollState.animateScrollTo(scrollState.maxValue)
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp)
+            ) {
+                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Add Context Unit")
+            }
+
+            Spacer(modifier = Modifier.height(48.dp))
+        }
+
+        // Sticky Header when in-line header is scrolled out of view
+        AnimatedVisibility(
+            visible = isHeaderOutOfView,
+            enter = fadeIn() + slideInVertically(initialOffsetY = { -it }),
+            exit = fadeOut() + slideOutVertically(targetOffsetY = { -it }),
+            modifier = Modifier.align(Alignment.TopCenter)
+        ) {
+            Surface(
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 4.dp,
+                shadowElevation = 4.dp,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Context Units (${uiState.units.size})",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primary
+                    ) {
+                        IconButton(
+                            onClick = {
+                                viewModel.addContextUnit()
+                                coroutineScope.launch {
+                                    scrollState.animateScrollTo(scrollState.maxValue)
+                                }
+                            },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Add,
+                                contentDescription = "Add context unit",
+                                tint = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
+}
 }
 
 @OptIn(ExperimentalFoundationApi::class)

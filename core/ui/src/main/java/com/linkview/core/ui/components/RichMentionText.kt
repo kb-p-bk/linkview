@@ -21,18 +21,18 @@ fun RichMentionText(
     style: TextStyle = MaterialTheme.typography.bodyLarge
 ) {
     val codeBg = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+    val linkColor = MaterialTheme.colorScheme.primary
+    val linkBg = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+
     val tokens = MentionTokenizer.extractTokens(rawText)
     if (tokens.isEmpty()) {
         Text(
-            text = parseMarkdownToAnnotatedString(rawText, codeBg),
+            text = parseMarkdownToAnnotatedString(rawText, codeBg, linkColor),
             style = style,
             modifier = modifier
         )
         return
     }
-
-    val linkColor = MaterialTheme.colorScheme.primary
-    val linkBg = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
 
     val annotatedString = buildAnnotatedString {
         var currentIndex = 0
@@ -41,7 +41,7 @@ fun RichMentionText(
             if (safeStart > currentIndex) {
                 val plainSegment = rawText.substring(currentIndex, safeStart)
                 if (plainSegment.isNotEmpty()) {
-                    append(parseMarkdownToAnnotatedString(plainSegment, codeBg))
+                    append(parseMarkdownToAnnotatedString(plainSegment, codeBg, linkColor))
                 }
             }
 
@@ -70,7 +70,7 @@ fun RichMentionText(
         if (currentIndex < rawText.length) {
             val trailing = rawText.substring(currentIndex)
             if (trailing.isNotEmpty()) {
-                append(parseMarkdownToAnnotatedString(trailing, codeBg))
+                append(parseMarkdownToAnnotatedString(trailing, codeBg, linkColor))
             }
         }
     }
