@@ -118,6 +118,7 @@ fun CardEditorScreen(
                     } else {
                         Button(
                             onClick = { viewModel.save() },
+                            enabled = !uiState.isSaving && uiState.title.isNotBlank() && uiState.duplicateCard == null,
                             modifier = Modifier.padding(end = 8.dp)
                         ) {
                             Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -186,7 +187,7 @@ fun CardEditorScreen(
                 shape = RoundedCornerShape(24.dp),
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
-                isError = uiState.errorMessage != null && uiState.title.isBlank()
+                isError = (uiState.errorMessage != null && uiState.title.isBlank()) || uiState.duplicateCard != null
             )
 
             // Multi-Tag Selector

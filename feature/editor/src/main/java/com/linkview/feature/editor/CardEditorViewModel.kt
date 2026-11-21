@@ -380,7 +380,23 @@ class CardEditorViewModel @Inject constructor(
             return
         }
 
+        if (currentState.duplicateCard != null) {
+            _uiState.update { it.copy(errorMessage = "A card titled '${currentState.duplicateCard.title}' already exists. Titles must be unique.") }
+            return
+        }
+
         viewModelScope.launch {
+            val duplicate = checkDuplicateTitleUseCase(trimmedTitle, excludeCardId = currentState.cardId)
+            if (duplicate != null) {
+                _uiState.update {
+                    it.copy(
+                        duplicateCard = duplicate,
+                        errorMessage = "A card titled '${duplicate.title}' already exists. Titles must be unique."
+                    )
+                }
+                return@launch
+            }
+
             _uiState.update { it.copy(isSaving = true, errorMessage = null) }
             val cardId = currentState.cardId ?: UUID.randomUUID().toString()
             val card = Card(
