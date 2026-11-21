@@ -68,6 +68,8 @@ crashlytics-build.properties
 
 # Internal docs (architecture, design notes)
 .docs/
+TODO.md
+todo.md
 
 # Node (if any tooling)
 node_modules/
