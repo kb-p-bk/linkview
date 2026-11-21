@@ -27,12 +27,15 @@ import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.SubdirectoryArrowRight
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
@@ -66,6 +69,8 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.linkview.core.common.Result
+import com.linkview.core.common.mention.MentionTokenizer
+import com.linkview.core.model.BacklinkItem
 import com.linkview.core.ui.components.ContextUnitEditorRow
 import com.linkview.core.ui.components.RichMentionText
 import kotlinx.coroutines.launch
@@ -250,72 +255,21 @@ fun CardDetailScreen(
                                     )
                                 }
                             } else {
-                                Card(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
-                                ) {
-                                    Column(modifier = Modifier.padding(12.dp)) {
-                                        SelectionContainer {
-                                            RichMentionText(
-                                                rawText = editableUnit.rawText,
-                                                onCardClick = onNavigateToCard
-                                            )
-                                        }
-
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.End
-                                        ) {
-                                            IconButton(
-                                                onClick = { viewModel.startEditingUnit(index) },
-                                                modifier = Modifier.size(28.dp)
-                                            ) {
-                                                Icon(
-                                                    Icons.Default.Edit,
-                                                    contentDescription = "Edit unit",
-                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
-                                                    modifier = Modifier.size(15.dp)
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
+                                ReadOnlyUnitCard(
+                                    rawText = editableUnit.rawText,
+                                    onNavigateToCard = onNavigateToCard,
+                                    onEdit = { viewModel.startEditingUnit(index) }
+                                )
                             }
                         }
                     } else {
                         // All units in normal read mode
                         cardWithContext.authoredUnits.forEachIndexed { index, unit ->
-                            Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
-                            ) {
-                                Column(modifier = Modifier.padding(12.dp)) {
-                                    SelectionContainer {
-                                        RichMentionText(
-                                            rawText = unit.rawText,
-                                            onCardClick = onNavigateToCard
-                                        )
-                                    }
-
-                                    // Inconspicuous edit icon on bottom right of the unit card
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.End
-                                    ) {
-                                        IconButton(
-                                            onClick = { viewModel.startEditingUnit(index) },
-                                            modifier = Modifier.size(28.dp)
-                                        ) {
-                                            Icon(
-                                                Icons.Default.Edit,
-                                                contentDescription = "Edit unit",
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
-                                                modifier = Modifier.size(15.dp)
-                                            )
-                                        }
-                                    }
-                                }
-                            }
+                            ReadOnlyUnitCard(
+                                rawText = unit.rawText,
+                                onNavigateToCard = onNavigateToCard,
+                                onEdit = { viewModel.startEditingUnit(index) }
+                            )
                         }
                     }
                 }
@@ -344,47 +298,10 @@ fun CardDetailScreen(
                     )
                 } else {
                     cardWithContext.incomingBacklinks.forEach { backlink ->
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                        ) {
-                            Column(modifier = Modifier.padding(12.dp)) {
-                                // Jump Source Chip
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = MaterialTheme.colorScheme.primaryContainer,
-                                    modifier = Modifier.clickable { onNavigateToCard(backlink.sourceCardId) }
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                    ) {
-                                        Icon(
-                                            Icons.Default.SubdirectoryArrowRight,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                            modifier = Modifier.size(14.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(
-                                            text = "From: ${backlink.sourceCardTitle}",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                                        )
-                                    }
-                                }
-
-                                Spacer(modifier = Modifier.height(8.dp))
-
-                                SelectionContainer {
-                                    RichMentionText(
-                                        rawText = backlink.rawText,
-                                        onCardClick = onNavigateToCard
-                                    )
-                                }
-                            }
-                        }
+                        BacklinkUnitCard(
+                            backlink = backlink,
+                            onNavigateToCard = onNavigateToCard
+                        )
                     }
                 }
             }
@@ -527,6 +444,178 @@ fun CardDetailScreen(
                     }
                 }
             )
+        }
+    }
+}
+
+@Composable
+private fun ReadOnlyUnitCard(
+    rawText: String,
+    onNavigateToCard: (String) -> Unit,
+    onEdit: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
+    var isMenuExpanded by remember { mutableStateOf(false) }
+
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            SelectionContainer {
+                RichMentionText(
+                    rawText = rawText,
+                    onCardClick = onNavigateToCard
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                Box {
+                    IconButton(
+                        onClick = { isMenuExpanded = true },
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.MoreVert,
+                            contentDescription = "Unit options",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+
+                    DropdownMenu(
+                        expanded = isMenuExpanded,
+                        onDismissRequest = { isMenuExpanded = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Edit") },
+                            leadingIcon = {
+                                Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
+                            },
+                            onClick = {
+                                isMenuExpanded = false
+                                onEdit()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Copy") },
+                            leadingIcon = {
+                                Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp))
+                            },
+                            onClick = {
+                                isMenuExpanded = false
+                                clipboardManager.setText(AnnotatedString(MentionTokenizer.stripCardUuids(rawText)))
+                                Toast.makeText(context, "Note copied to clipboard", Toast.LENGTH_SHORT).show()
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BacklinkUnitCard(
+    backlink: BacklinkItem,
+    onNavigateToCard: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
+    var isMenuExpanded by remember { mutableStateOf(false) }
+
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Jump Source Chip
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    modifier = Modifier.clickable { onNavigateToCard(backlink.sourceCardId) }
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.SubdirectoryArrowRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "From: ${backlink.sourceCardTitle}",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
+
+                Box {
+                    IconButton(
+                        onClick = { isMenuExpanded = true },
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.MoreVert,
+                            contentDescription = "Extra context options",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+
+                    DropdownMenu(
+                        expanded = isMenuExpanded,
+                        onDismissRequest = { isMenuExpanded = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Copy") },
+                            leadingIcon = {
+                                Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp))
+                            },
+                            onClick = {
+                                isMenuExpanded = false
+                                clipboardManager.setText(AnnotatedString(MentionTokenizer.stripCardUuids(backlink.rawText)))
+                                Toast.makeText(context, "Note copied to clipboard", Toast.LENGTH_SHORT).show()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Open '${backlink.sourceCardTitle}'") },
+                            leadingIcon = {
+                                Icon(Icons.Default.SubdirectoryArrowRight, contentDescription = null, modifier = Modifier.size(18.dp))
+                            },
+                            onClick = {
+                                isMenuExpanded = false
+                                onNavigateToCard(backlink.sourceCardId)
+                            }
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            SelectionContainer {
+                RichMentionText(
+                    rawText = backlink.rawText,
+                    onCardClick = onNavigateToCard
+                )
+            }
         }
     }
 }
