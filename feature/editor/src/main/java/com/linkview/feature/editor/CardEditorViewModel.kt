@@ -16,12 +16,29 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import java.util.UUID
 import javax.inject.Inject
 
 private val DEFAULT_CARD_TYPES = listOf("Person", "Event", "Place", "Institution", "Concept")
 
+private data class MentionQueryData(
+    val query: String,
+    val unitIndex: Int,
+    val startIndex: Int,
+    val endIndex: Int
+)
+
+@OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class CardEditorViewModel @Inject constructor(
     private val saveCardUseCase: SaveCardUseCase,
@@ -34,6 +51,8 @@ class CardEditorViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(CardEditorUiState())
     val uiState: StateFlow<CardEditorUiState> = _uiState.asStateFlow()
 
+    private val mentionQueryFlow = MutableStateFlow<MentionQueryData?>(null)
+
     init {
         viewModelScope.launch {
             cardRepository.observeAllTags().collect { tags ->
@@ -41,6 +60,28 @@ class CardEditorViewModel @Inject constructor(
                 _uiState.update { it.copy(allExistingTags = sortedTags) }
             }
         }
+
+        mentionQueryFlow
+            .debounce(300)
+            .distinctUntilChanged()
+            .flatMapLatest { queryData ->
+                if (queryData == null) {
+                    flowOf(emptyList())
+                } else {
+                    flow {
+                        val suggestions = autocompleteCardsUseCase(
+                            query = queryData.query,
+                            excludeCardId = _uiState.value.cardId,
+                            limit = 8
+                        )
+                        emit(suggestions)
+                    }
+                }
+            }
+            .onEach { suggestions ->
+                _uiState.update { it.copy(mentionSuggestions = suggestions) }
+            }
+            .launchIn(viewModelScope)
     }
 
     fun loadCard(cardId: String?) {
@@ -55,7 +96,7 @@ class CardEditorViewModel @Inject constructor(
             if (cardWithContext != null) {
                 val editableUnits = if (cardWithContext.authoredUnits.isNotEmpty()) {
                     cardWithContext.authoredUnits.map {
-                        EditableUnit(id = it.id, rawText = it.rawText)
+                        EditableUnit(id = it.id, rawText = MentionTokenizer.stripCardUuids(it.rawText))
                     }
                 } else {
                     listOf(EditableUnit())
@@ -76,6 +117,7 @@ class CardEditorViewModel @Inject constructor(
     }
 
     fun resetState() {
+        mentionQueryFlow.value = null
         _uiState.value = CardEditorUiState()
     }
 
@@ -193,20 +235,19 @@ class CardEditorViewModel @Inject constructor(
                             mentionEndIndex = actualEndIndex
                         )
                     }
-                    viewModelScope.launch {
-                        val suggestions = autocompleteCardsUseCase(
-                            query = queryCandidate,
-                            excludeCardId = _uiState.value.cardId,
-                            limit = 8
-                        )
-                        _uiState.update { it.copy(mentionSuggestions = suggestions) }
-                    }
+                    mentionQueryFlow.value = MentionQueryData(
+                        query = queryCandidate,
+                        unitIndex = index,
+                        startIndex = atIndex,
+                        endIndex = actualEndIndex
+                    )
                     return
                 }
             }
         }
 
         // Dismiss suggestions if not in a valid mention
+        mentionQueryFlow.value = null
         _uiState.update {
             it.copy(
                 activeMentionQuery = null,
@@ -307,6 +348,7 @@ class CardEditorViewModel @Inject constructor(
     }
 
     fun dismissMentionSuggestions() {
+        mentionQueryFlow.value = null
         _uiState.update {
             it.copy(
                 activeMentionQuery = null,

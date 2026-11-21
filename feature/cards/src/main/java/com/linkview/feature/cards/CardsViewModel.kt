@@ -114,6 +114,13 @@ class CardsViewModel @Inject constructor(
         _uiState.update { it.copy(tagSearchQuery = query) }
     }
 
+    fun resolveCardId(cardIdOrTitle: String): String {
+        val cards = _uiState.value.allCards
+        val matchingCard = cards.find { it.id == cardIdOrTitle }
+            ?: cards.find { it.title.equals(cardIdOrTitle, ignoreCase = true) }
+        return matchingCard?.id ?: cardIdOrTitle
+    }
+
     fun addAndSelectCustomTag(tag: String) {
         val trimmed = tag.trim()
         if (trimmed.isEmpty()) return

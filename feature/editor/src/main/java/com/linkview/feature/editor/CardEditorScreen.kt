@@ -16,7 +16,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -231,67 +236,64 @@ fun CardEditorScreen(
                 }
 
                 // Inline Tag Input with Autocomplete
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Box(modifier = Modifier.weight(1f)) {
-                        OutlinedTextField(
-                            value = uiState.tagInputText,
-                            onValueChange = {
-                                viewModel.onTagInputChanged(it)
-                                isTagDropdownOpen = it.isNotBlank()
-                            },
-                            placeholder = { Text("Search & add tag...", maxLines = 1) },
-                            shape = RoundedCornerShape(24.dp),
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        val inputQuery = uiState.tagInputText.trim()
-                        val matchingExisting = uiState.allExistingTags
-                            .filter { it.contains(inputQuery, ignoreCase = true) && !uiState.tags.any { t -> t.equals(it, ignoreCase = true) } }
-                        val isNewTag = inputQuery.isNotBlank() && !uiState.allExistingTags.any { it.equals(inputQuery, ignoreCase = true) }
-
-                        DropdownMenu(
-                            expanded = isTagDropdownOpen && (matchingExisting.isNotEmpty() || isNewTag),
-                            onDismissRequest = { isTagDropdownOpen = false },
-                            properties = PopupProperties(focusable = false)
-                        ) {
-                            matchingExisting.take(8).forEach { tag ->
-                                DropdownMenuItem(
-                                    text = { Text(tag) },
-                                    onClick = {
-                                        viewModel.addTag(tag)
-                                        isTagDropdownOpen = false
-                                    }
-                                )
-                            }
-                            if (isNewTag) {
-                                DropdownMenuItem(
-                                    text = { Text("+ Add \"$inputQuery\"") },
-                                    leadingIcon = { Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp)) },
-                                    onClick = {
-                                        viewModel.addTag(inputQuery)
-                                        isTagDropdownOpen = false
-                                    }
-                                )
-                            }
-                        }
-                    }
-
-                    Button(
-                        onClick = {
-                            viewModel.addTag(uiState.tagInputText)
-                            isTagDropdownOpen = false
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    OutlinedTextField(
+                        value = uiState.tagInputText,
+                        onValueChange = {
+                            viewModel.onTagInputChanged(it)
+                            isTagDropdownOpen = it.isNotBlank()
                         },
+                        placeholder = { Text("Search & add tag...", maxLines = 1) },
                         shape = RoundedCornerShape(24.dp),
-                        enabled = uiState.tagInputText.isNotBlank()
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(
+                            onDone = {
+                                if (uiState.tagInputText.isNotBlank()) {
+                                    viewModel.addTag(uiState.tagInputText)
+                                    isTagDropdownOpen = false
+                                }
+                            }
+                        ),
+                        trailingIcon = {
+                            if (uiState.tagInputText.isNotEmpty()) {
+                                IconButton(onClick = { viewModel.onTagInputChanged("") }) {
+                                    Icon(Icons.Default.Clear, contentDescription = "Clear tag input", modifier = Modifier.size(16.dp))
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    val inputQuery = uiState.tagInputText.trim()
+                    val matchingExisting = uiState.allExistingTags
+                        .filter { it.contains(inputQuery, ignoreCase = true) && !uiState.tags.any { t -> t.equals(it, ignoreCase = true) } }
+                    val isNewTag = inputQuery.isNotBlank() && !uiState.allExistingTags.any { it.equals(inputQuery, ignoreCase = true) }
+
+                    DropdownMenu(
+                        expanded = isTagDropdownOpen && (matchingExisting.isNotEmpty() || isNewTag),
+                        onDismissRequest = { isTagDropdownOpen = false },
+                        properties = PopupProperties(focusable = false)
                     ) {
-                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Add")
+                        matchingExisting.take(8).forEach { tag ->
+                            DropdownMenuItem(
+                                text = { Text(tag) },
+                                onClick = {
+                                    viewModel.addTag(tag)
+                                    isTagDropdownOpen = false
+                                }
+                            )
+                        }
+                        if (isNewTag) {
+                            DropdownMenuItem(
+                                text = { Text("+ Add \"$inputQuery\"") },
+                                leadingIcon = { Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                                onClick = {
+                                    viewModel.addTag(inputQuery)
+                                    isTagDropdownOpen = false
+                                }
+                            )
+                        }
                     }
                 }
 
@@ -327,10 +329,21 @@ fun CardEditorScreen(
                     text = "Context Units (${uiState.units.size})",
                     style = MaterialTheme.typography.titleMedium
                 )
-                OutlinedButton(onClick = { viewModel.addContextUnit() }) {
-                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Add Unit")
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.secondaryContainer
+                ) {
+                    IconButton(
+                        onClick = { viewModel.addContextUnit() },
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Add,
+                            contentDescription = "Add context unit",
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
             }
 

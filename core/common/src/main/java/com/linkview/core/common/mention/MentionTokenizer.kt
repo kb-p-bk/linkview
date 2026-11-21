@@ -2,27 +2,31 @@ package com.linkview.core.common.mention
 
 /**
  * Tokenizer for LinkView @ mentions.
- * Canonical raw token syntax: @[Label](card:<uuid>)
+ * Canonical raw token syntax: @[Label](card:<uuid>) or @[Label]
  * Denormalized plain-text representation: @Label
  */
 object MentionTokenizer {
-    private val TOKEN_REGEX = Regex("""@\[([^\]]+)\]\(card:([a-zA-Z0-9\-_]+)\)""")
+    private val TOKEN_REGEX = Regex("""@\[([^\]]+)\](?:\(card:([a-zA-Z0-9\-_]+)\))?""")
 
     /**
-     * Extracts all unique referenced card IDs from the raw text.
+     * Extracts all unique referenced card IDs or titles from the raw text.
      */
     fun extractReferences(rawText: String): Set<String> {
-        return TOKEN_REGEX.findAll(rawText).map { it.groupValues[2] }.toSet()
+        return TOKEN_REGEX.findAll(rawText).map { matchResult ->
+            val uuid = matchResult.groups[2]?.value
+            if (!uuid.isNullOrEmpty()) uuid else matchResult.groupValues[1]
+        }.toSet()
     }
 
     /**
-     * Extracts all mention tokens with label, target ID, and character indices.
+     * Extracts all mention tokens with label, target ID (or title if ID absent), and character indices.
      */
     fun extractTokens(rawText: String): List<MentionToken> {
         return TOKEN_REGEX.findAll(rawText).map { matchResult ->
+            val uuid = matchResult.groups[2]?.value
             MentionToken(
                 label = matchResult.groupValues[1],
-                targetCardId = matchResult.groupValues[2],
+                targetCardId = if (!uuid.isNullOrEmpty()) uuid else matchResult.groupValues[1],
                 startIndex = matchResult.range.first,
                 endIndex = matchResult.range.last + 1
             )
@@ -30,7 +34,7 @@ object MentionTokenizer {
     }
 
     /**
-     * Converts raw text containing @[Label](card:uuid) into user-friendly plain text "@Label".
+     * Converts raw text containing @[Label](card:uuid) or @[Label] into user-friendly plain text "@Label".
      */
     fun toPlainText(rawText: String): String {
         return TOKEN_REGEX.replace(rawText) { matchResult ->
@@ -39,20 +43,29 @@ object MentionTokenizer {
     }
 
     /**
-     * Formats a label and target card ID into canonical raw token syntax.
+     * Formats a label into clean mention syntax without UUID noise.
      */
-    fun formatToken(title: String, targetCardId: String): String {
-        return "@[$title](card:$targetCardId)"
+    fun formatToken(title: String, targetCardId: String? = null): String {
+        return "@[$title]"
+    }
+
+    /**
+     * Removes UUID noise from any legacy @[Label](card:uuid) tokens, converting to @[Label].
+     */
+    fun stripCardUuids(rawText: String): String {
+        return TOKEN_REGEX.replace(rawText) { matchResult ->
+            "@[" + matchResult.groupValues[1] + "]"
+        }
     }
 
     /**
      * Replaces the display label of existing tokens with updated titles using a lookup function.
      */
-    fun updateMentionLabels(rawText: String, titleLookup: (cardId: String) -> String?): String {
+    fun updateMentionLabels(rawText: String, titleLookup: (cardIdOrTitle: String) -> String?): String {
         return TOKEN_REGEX.replace(rawText) { matchResult ->
-            val cardId = matchResult.groupValues[2]
-            val updatedTitle = titleLookup(cardId) ?: matchResult.groupValues[1]
-            formatToken(updatedTitle, cardId)
+            val cardIdOrTitle = matchResult.groups[2]?.value ?: matchResult.groupValues[1]
+            val updatedTitle = titleLookup(cardIdOrTitle) ?: matchResult.groupValues[1]
+            formatToken(updatedTitle)
         }
     }
 }

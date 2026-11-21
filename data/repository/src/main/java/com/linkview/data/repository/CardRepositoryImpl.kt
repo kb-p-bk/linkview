@@ -121,8 +121,8 @@ class CardRepositoryImpl @Inject constructor(
                 val referencingUnits = contextUnitDao.getUnitsReferencingCard(card.id)
                 if (referencingUnits.isNotEmpty()) {
                     val updatedUnits = referencingUnits.map { unitEntity ->
-                        val updatedRaw = MentionTokenizer.updateMentionLabels(unitEntity.rawText) { id ->
-                            if (id == card.id) card.title else null
+                        val updatedRaw = MentionTokenizer.updateMentionLabels(unitEntity.rawText) { idOrTitle ->
+                            if (idOrTitle == card.id || idOrTitle.equals(existingCard.title, ignoreCase = true)) card.title else null
                         }
                         val updatedPlain = MentionTokenizer.toPlainText(updatedRaw)
                         unitEntity.copy(rawText = updatedRaw, plainText = updatedPlain)
@@ -162,9 +162,12 @@ class CardRepositoryImpl @Inject constructor(
                 // Build unit_references junction links
                 val references = mutableListOf<UnitReferenceEntity>()
                 for (unit in unitEntities) {
-                    val targetIds = MentionTokenizer.extractReferences(unit.rawText)
-                    for (targetId in targetIds) {
-                        references.add(UnitReferenceEntity(unitId = unit.id, targetCardId = targetId))
+                    val targetRefs = MentionTokenizer.extractReferences(unit.rawText)
+                    for (target in targetRefs) {
+                        val targetCard = cardDao.getCardById(target) ?: cardDao.getCardByExactTitle(target)
+                        if (targetCard != null) {
+                            references.add(UnitReferenceEntity(unitId = unit.id, targetCardId = targetCard.id))
+                        }
                     }
                 }
                 if (references.isNotEmpty()) {

@@ -17,7 +17,8 @@ import javax.inject.Inject
 @HiltViewModel
 class CardDetailViewModel @Inject constructor(
     private val getCardDetailUseCase: GetCardDetailWithBacklinksUseCase,
-    private val deleteCardUseCase: DeleteCardUseCase
+    private val deleteCardUseCase: DeleteCardUseCase,
+    private val cardRepository: com.linkview.domain.repository.CardRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(CardDetailUiState())
@@ -31,9 +32,14 @@ class CardDetailViewModel @Inject constructor(
 
         observeJob?.cancel()
         observeJob = viewModelScope.launch {
-            getCardDetailUseCase(cardId).collect { cardWithContext ->
+            val resolvedId = cardRepository.getCardById(cardId)?.id
+                ?: cardRepository.getCardByTitle(cardId)?.id
+                ?: cardId
+
+            getCardDetailUseCase(resolvedId).collect { cardWithContext ->
                 _uiState.update {
                     it.copy(
+                        cardId = resolvedId,
                         cardWithContext = cardWithContext,
                         isLoading = false,
                         errorMessage = if (cardWithContext == null) "Card not found" else null

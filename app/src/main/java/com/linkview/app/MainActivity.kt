@@ -101,12 +101,13 @@ private fun TabletResponsiveLayout(
     val isDetailOpen = activeCardId != null || editingCardId != null || isShowingBackup
 
     fun jumpToCard(targetCardId: String) {
-        if (activeCardId != null && activeCardId != targetCardId) {
+        val resolvedId = cardsViewModel.resolveCardId(targetCardId)
+        if (activeCardId != null && activeCardId != resolvedId) {
             cardJumpHistory.add(activeCardId!!)
         }
         editingCardId = null
         isShowingBackup = false
-        activeCardId = targetCardId
+        activeCardId = resolvedId
     }
 
     fun handleTabletBack(): Boolean {
@@ -165,11 +166,11 @@ private fun TabletResponsiveLayout(
                 .fillMaxWidth()
                 .weight(1f)
         ) {
-            // Left area: Cards Grid
+            // Left area: Cards Grid (~38% when detail open)
             Box(
                 modifier = if (isDetailOpen) {
                     Modifier
-                        .width(380.dp)
+                        .weight(0.38f)
                         .fillMaxHeight()
                 } else {
                     Modifier.fillMaxSize()
@@ -190,7 +191,7 @@ private fun TabletResponsiveLayout(
 
                 Box(
                     modifier = Modifier
-                        .weight(1f)
+                        .weight(0.62f)
                         .fillMaxHeight()
                 ) {
                     when {
@@ -238,7 +239,9 @@ private fun TabletResponsiveLayout(
  * Single-Pane Navigation Stack for Phones / Compact Windows
  */
 @Composable
-private fun PhoneSinglePaneNavHost() {
+private fun PhoneSinglePaneNavHost(
+    cardsViewModel: CardsViewModel = hiltViewModel()
+) {
     val navController = rememberNavController()
 
     NavHost(
@@ -272,7 +275,8 @@ private fun PhoneSinglePaneNavHost() {
                     navController.navigate("editor?cardId=$editCardId")
                 },
                 onNavigateToCard = { targetCardId ->
-                    navController.navigate("detail/$targetCardId")
+                    val resolvedId = cardsViewModel.resolveCardId(targetCardId)
+                    navController.navigate("detail/$resolvedId")
                 },
                 onDeleteSuccess = {
                     navController.popBackStack()
