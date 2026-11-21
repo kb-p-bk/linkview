@@ -12,12 +12,11 @@ data class CardDetailUiState(
     val isConfirmingDelete: Boolean = false,
     val referencingBacklinkCount: Int = 0,
     val deleteSuccess: Boolean = false,
-    val isEditingUnits: Boolean = false,
+    val editingUnitIndex: Int? = null,
     val editableUnits: List<EditableUnit> = emptyList(),
     val activeMentionQuery: String? = null,
-    val activeUnitIndex: Int? = null,
     val mentionStartIndex: Int = -1,
     val mentionEndIndex: Int = -1,
     val mentionSuggestions: List<Card> = emptyList(),
-    val isSavingUnits: Boolean = false
+    val isSavingUnit: Boolean = false
 )

@@ -96,10 +96,9 @@ class CardDetailViewModel @Inject constructor(
                 errorMessage = null,
                 deleteSuccess = false,
                 isConfirmingDelete = false,
-                isEditingUnits = false,
+                editingUnitIndex = null,
                 editableUnits = emptyList(),
                 activeMentionQuery = null,
-                activeUnitIndex = null,
                 mentionSuggestions = emptyList()
             )
         }
@@ -123,75 +122,94 @@ class CardDetailViewModel @Inject constructor(
         }
     }
 
-    fun startEditingUnits(targetUnitIndex: Int? = null) {
+    fun startEditingUnit(index: Int) {
         val currentUnits = _uiState.value.cardWithContext?.authoredUnits.orEmpty()
-        val editable = if (currentUnits.isNotEmpty()) {
-            currentUnits.map {
-                EditableUnit(id = it.id, rawText = MentionTokenizer.stripCardUuids(it.rawText))
-            }
-        } else {
-            listOf(EditableUnit())
+        if (index !in currentUnits.indices) return
+        val editable = currentUnits.map {
+            EditableUnit(id = it.id, rawText = MentionTokenizer.stripCardUuids(it.rawText))
         }
         _uiState.update {
             it.copy(
-                isEditingUnits = true,
+                editingUnitIndex = index,
                 editableUnits = editable,
-                activeUnitIndex = targetUnitIndex,
                 activeMentionQuery = null,
                 mentionSuggestions = emptyList()
             )
         }
     }
 
-    fun cancelEditingUnits() {
+    fun cancelEditingUnit() {
         mentionQueryFlow.value = null
         _uiState.update {
             it.copy(
-                isEditingUnits = false,
+                editingUnitIndex = null,
                 editableUnits = emptyList(),
                 activeMentionQuery = null,
-                activeUnitIndex = null,
                 mentionSuggestions = emptyList()
             )
         }
     }
 
-    fun addContextUnit() {
-        _uiState.update { state ->
-            state.copy(editableUnits = state.editableUnits + EditableUnit())
-        }
-    }
-
-    fun removeContextUnit(index: Int) {
-        _uiState.update { state ->
-            val updated = state.editableUnits.toMutableList()
-            if (index in updated.indices) {
-                updated.removeAt(index)
-            }
-            if (updated.isEmpty()) {
-                updated.add(EditableUnit())
-            }
-            state.copy(
-                editableUnits = updated,
-                activeMentionQuery = if (state.activeUnitIndex == index) null else state.activeMentionQuery,
-                activeUnitIndex = if (state.activeUnitIndex == index) null else state.activeUnitIndex
-            )
-        }
-    }
-
-    fun moveContextUnit(fromIndex: Int, toIndex: Int) {
+    fun moveEditingUnit(fromIndex: Int, toIndex: Int) {
         _uiState.update { state ->
             val updated = state.editableUnits.toMutableList()
             if (fromIndex in updated.indices && toIndex in updated.indices) {
                 val item = updated.removeAt(fromIndex)
                 updated.add(toIndex, item)
             }
-            val newActiveIndex = when (state.activeUnitIndex) {
-                fromIndex -> toIndex
-                toIndex -> fromIndex
-                else -> state.activeUnitIndex
+            state.copy(
+                editableUnits = updated,
+                editingUnitIndex = toIndex
+            )
+        }
+    }
+
+    fun deleteEditingUnit(index: Int) {
+        val currentState = _uiState.value
+        val cardWithContext = currentState.cardWithContext ?: return
+        val card = cardWithContext.card
+        val updated = currentState.editableUnits.toMutableList()
+        if (index in updated.indices) {
+            updated.removeAt(index)
+        }
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSavingUnit = true) }
+            val domainUnits = updated
+                .filter { it.rawText.isNotBlank() }
+                .mapIndexed { idx, unit ->
+                    ContextUnit(
+                        id = unit.id,
+                        sourceCardId = card.id,
+                        sortOrder = idx,
+                        rawText = unit.rawText,
+                        plainText = MentionTokenizer.toPlainText(unit.rawText)
+                    )
+                }
+
+            when (val result = saveCardUseCase(card, domainUnits)) {
+                is Result.Success -> {
+                    _uiState.update {
+                        it.copy(
+                            editingUnitIndex = null,
+                            isSavingUnit = false,
+                            editableUnits = emptyList(),
+                            activeMentionQuery = null,
+                            mentionSuggestions = emptyList()
+                        )
+                    }
+                    loadCard(card.id)
+                }
+                is Result.Error -> {
+                    _uiState.update {
+                        it.copy(
+                            isSavingUnit = false,
+                            errorMessage = result.message ?: "Failed to delete unit"
+                        )
+                    }
+                }
+                is Result.Loading -> Unit
             }
-            state.copy(editableUnits = updated, activeUnitIndex = newActiveIndex)
         }
     }
 
@@ -225,7 +243,6 @@ class CardDetailViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         activeMentionQuery = queryCandidate,
-                        activeUnitIndex = index,
                         mentionStartIndex = atIndex,
                         mentionEndIndex = endIndex
                     )
@@ -244,7 +261,6 @@ class CardDetailViewModel @Inject constructor(
         _uiState.update {
             it.copy(
                 activeMentionQuery = null,
-                activeUnitIndex = null,
                 mentionStartIndex = -1,
                 mentionEndIndex = -1,
                 mentionSuggestions = emptyList()
@@ -254,7 +270,7 @@ class CardDetailViewModel @Inject constructor(
 
     fun selectMention(card: Card) {
         val state = _uiState.value
-        val activeIndex = state.activeUnitIndex ?: return
+        val activeIndex = state.editingUnitIndex ?: return
         val currentUnits = state.editableUnits
         if (activeIndex !in currentUnits.indices) return
 
@@ -311,7 +327,6 @@ class CardDetailViewModel @Inject constructor(
             current.copy(
                 editableUnits = updated,
                 activeMentionQuery = null,
-                activeUnitIndex = null,
                 mentionStartIndex = -1,
                 mentionEndIndex = -1,
                 mentionSuggestions = emptyList()
@@ -339,20 +354,20 @@ class CardDetailViewModel @Inject constructor(
         }
     }
 
-    fun saveEditingUnits() {
+    fun saveEditingUnit() {
         val currentState = _uiState.value
         val cardWithContext = currentState.cardWithContext ?: return
         val card = cardWithContext.card
 
         viewModelScope.launch {
-            _uiState.update { it.copy(isSavingUnits = true) }
+            _uiState.update { it.copy(isSavingUnit = true) }
             val domainUnits = currentState.editableUnits
                 .filter { it.rawText.isNotBlank() }
-                .mapIndexed { index, unit ->
+                .mapIndexed { idx, unit ->
                     ContextUnit(
                         id = unit.id,
                         sourceCardId = card.id,
-                        sortOrder = index,
+                        sortOrder = idx,
                         rawText = unit.rawText,
                         plainText = MentionTokenizer.toPlainText(unit.rawText)
                     )
@@ -362,11 +377,10 @@ class CardDetailViewModel @Inject constructor(
                 is Result.Success -> {
                     _uiState.update {
                         it.copy(
-                            isEditingUnits = false,
-                            isSavingUnits = false,
+                            editingUnitIndex = null,
+                            isSavingUnit = false,
                             editableUnits = emptyList(),
                             activeMentionQuery = null,
-                            activeUnitIndex = null,
                             mentionSuggestions = emptyList()
                         )
                     }
@@ -375,8 +389,8 @@ class CardDetailViewModel @Inject constructor(
                 is Result.Error -> {
                     _uiState.update {
                         it.copy(
-                            isSavingUnits = false,
-                            errorMessage = result.message ?: "Failed to save context units"
+                            isSavingUnit = false,
+                            errorMessage = result.message ?: "Failed to save unit"
                         )
                     }
                 }

@@ -26,15 +26,19 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -64,7 +68,10 @@ fun ContextUnitEditorRow(
     onDelete: () -> Unit,
     onSelectMention: (Card) -> Unit,
     onQuickCreateMention: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onSave: (() -> Unit)? = null,
+    onCancel: (() -> Unit)? = null,
+    isSaving: Boolean = false
 ) {
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
 
@@ -242,6 +249,44 @@ fun ContextUnitEditorRow(
                 modifier = Modifier.fillMaxWidth(),
                 minLines = 2
             )
+
+            // Self-contained action buttons when editing a single unit
+            if (onSave != null || onCancel != null) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (onCancel != null) {
+                        TextButton(
+                            onClick = onCancel,
+                            enabled = !isSaving
+                        ) {
+                            Text("Cancel")
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
+                    if (onSave != null) {
+                        Button(
+                            onClick = onSave,
+                            enabled = !isSaving
+                        ) {
+                            if (isSaving) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.onPrimary
+                                )
+                            } else {
+                                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Save")
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
