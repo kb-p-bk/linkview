@@ -1,6 +1,7 @@
 package com.linkview.feature.cards
 
 import com.linkview.core.model.Card
+import com.linkview.core.model.CardCollection
 import com.linkview.core.model.SearchResultItem
 import com.linkview.core.model.SearchScope
 
@@ -14,8 +15,13 @@ data class CardsUiState(
     val searchResults: List<SearchResultItem> = emptyList(),
     val selectedCardId: String? = null,
     val isLoading: Boolean = false,
-    val displayLimit: Int = 1000
+    val displayLimit: Int = 1000,
+    val collections: List<CardCollection> = emptyList(),
+    val activeCollectionId: String = CardCollection.DEFAULT_ID
 ) {
+    val activeCollectionName: String
+        get() = collections.firstOrNull { it.id == activeCollectionId }?.name ?: CardCollection.DEFAULT_NAME
+
     val isSearching: Boolean get() = searchQuery.isNotBlank()
 
     /**

@@ -6,4 +6,8 @@ import kotlinx.coroutines.flow.Flow
 interface PreferencesRepository {
     fun observeSearchScope(): Flow<SearchScope>
     suspend fun setSearchScope(scope: SearchScope)
+
+    fun observeActiveCollectionId(): Flow<String>
+    suspend fun getActiveCollectionId(): String
+    suspend fun setActiveCollectionId(id: String)
 }

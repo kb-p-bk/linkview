@@ -27,12 +27,17 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tag
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -44,8 +49,10 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -56,11 +63,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.PopupProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.linkview.core.model.Card as DomainCard
+import com.linkview.core.model.CardCollection
 import com.linkview.core.model.SearchResultItem
 import com.linkview.core.model.SearchScope
 import com.linkview.core.ui.components.CompactSearchBar
@@ -81,9 +90,15 @@ fun CardsHeader(
     onAddAndSelectTag: (String) -> Unit,
     onCreateCardClick: () -> Unit,
     onNavigateToBackup: () -> Unit,
+    onSelectCollection: (String) -> Unit = {},
+    onCreateCollection: (String) -> Unit = {},
+    onDeleteCollection: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var isTagDropdownExpanded by remember { mutableStateOf(false) }
+    var isCollectionMenuExpanded by remember { mutableStateOf(false) }
+    var showCreateDialog by remember { mutableStateOf(false) }
+    var collectionToDelete by remember { mutableStateOf<CardCollection?>(null) }
 
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -96,12 +111,121 @@ fun CardsHeader(
                 .padding(horizontal = 16.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Row 1: Search Bar (pill) + Add Button + Backup Button
+            // Row 1: Collection Switcher + Search Bar (pill) + Add Button + Backup Button
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                // Collection Switcher Button (pill)
+                Box {
+                    Surface(
+                        shape = RoundedCornerShape(22.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier
+                            .height(44.dp)
+                            .clickable { isCollectionMenuExpanded = true }
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .padding(horizontal = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Folder,
+                                contentDescription = "Collection",
+                                modifier = Modifier.size(18.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = uiState.activeCollectionName,
+                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Medium),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.widthIn(max = 110.dp)
+                            )
+                            Icon(
+                                Icons.Default.ArrowDropDown,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    DropdownMenu(
+                        expanded = isCollectionMenuExpanded,
+                        onDismissRequest = { isCollectionMenuExpanded = false }
+                    ) {
+                        Text(
+                            text = "Collections",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                        )
+
+                        uiState.collections.forEach { collection ->
+                            val isSelected = collection.id == uiState.activeCollectionId
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = collection.name,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                },
+                                leadingIcon = {
+                                    if (isSelected) {
+                                        Icon(
+                                            Icons.Default.Check,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp),
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    } else {
+                                        Spacer(modifier = Modifier.size(18.dp))
+                                    }
+                                },
+                                trailingIcon = {
+                                    if (collection.id != CardCollection.DEFAULT_ID) {
+                                        IconButton(
+                                            onClick = {
+                                                isCollectionMenuExpanded = false
+                                                collectionToDelete = collection
+                                            },
+                                            modifier = Modifier.size(24.dp)
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Delete,
+                                                contentDescription = "Delete collection",
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    }
+                                },
+                                onClick = {
+                                    isCollectionMenuExpanded = false
+                                    onSelectCollection(collection.id)
+                                }
+                            )
+                        }
+
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                        DropdownMenuItem(
+                            text = { Text("New Collection...") },
+                            leadingIcon = {
+                                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                            },
+                            onClick = {
+                                isCollectionMenuExpanded = false
+                                showCreateDialog = true
+                            }
+                        )
+                    }
+                }
+
                 CompactSearchBar(
                     value = uiState.searchQuery,
                     onValueChange = onSearchQueryChanged,
@@ -154,6 +278,78 @@ fun CardsHeader(
                         Icon(Icons.Default.CloudDownload, contentDescription = "Backup & Restore", modifier = Modifier.size(20.dp))
                     }
                 }
+            }
+
+            if (showCreateDialog) {
+                var newCollectionName by remember { mutableStateOf("") }
+                AlertDialog(
+                    onDismissRequest = { showCreateDialog = false },
+                    title = { Text("New Collection") },
+                    text = {
+                        Column {
+                            Text(
+                                text = "Create a separate collection for isolated cards, references, and tags.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            OutlinedTextField(
+                                value = newCollectionName,
+                                onValueChange = { newCollectionName = it },
+                                label = { Text("Collection Name") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                val clean = newCollectionName.trim()
+                                if (clean.isNotEmpty()) {
+                                    onCreateCollection(clean)
+                                    showCreateDialog = false
+                                }
+                            },
+                            enabled = newCollectionName.trim().isNotEmpty()
+                        ) {
+                            Text("Create")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showCreateDialog = false }) {
+                            Text("Cancel")
+                        }
+                    }
+                )
+            }
+
+            collectionToDelete?.let { col ->
+                AlertDialog(
+                    onDismissRequest = { collectionToDelete = null },
+                    title = { Text("Delete Collection") },
+                    text = {
+                        Text("Are you sure you want to delete '${col.name}'? All cards and context units in this collection will be permanently deleted.")
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                onDeleteCollection(col.id)
+                                collectionToDelete = null
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.error
+                            )
+                        ) {
+                            Text("Delete")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { collectionToDelete = null }) {
+                            Text("Cancel")
+                        }
+                    }
+                )
             }
 
             // Row 2: Tag Search & Autocomplete + Multi-Tag Filter Chips
@@ -546,7 +742,10 @@ fun CardsScreen(
             onToggleTagFilter = { viewModel.toggleTagFilter(it) },
             onAddAndSelectTag = { viewModel.addAndSelectCustomTag(it) },
             onCreateCardClick = onCreateCardClick,
-            onNavigateToBackup = onNavigateToBackup
+            onNavigateToBackup = onNavigateToBackup,
+            onSelectCollection = { viewModel.selectCollection(it) },
+            onCreateCollection = { viewModel.createCollection(it) },
+            onDeleteCollection = { viewModel.deleteCollection(it) }
         )
 
         HorizontalDivider(

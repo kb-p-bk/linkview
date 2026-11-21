@@ -7,6 +7,7 @@ import com.linkview.core.common.DispatcherProvider
 import com.linkview.core.common.mention.MentionTokenizer
 import com.linkview.core.model.BacklinkItem
 import com.linkview.core.model.Card
+import com.linkview.core.model.CardCollection
 import com.linkview.core.model.CardWithContext
 import com.linkview.core.model.ContextUnit
 import com.linkview.data.database.LinkViewDatabase
@@ -18,46 +19,61 @@ import com.linkview.data.database.entity.CardTagEntity
 import com.linkview.data.database.entity.ContextUnitEntity
 import com.linkview.data.database.entity.UnitReferenceEntity
 import com.linkview.domain.repository.CardRepository
+import com.linkview.domain.repository.PreferencesRepository
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
+@OptIn(ExperimentalCoroutinesApi::class)
 @Singleton
 class CardRepositoryImpl @Inject constructor(
     private val database: LinkViewDatabase,
     private val cardDao: CardDao,
     private val contextUnitDao: ContextUnitDao,
     private val unitReferenceDao: UnitReferenceDao,
+    private val preferencesRepository: PreferencesRepository,
     private val dispatchers: DispatcherProvider
 ) : CardRepository {
 
     override fun observeAllCards(): Flow<List<Card>> {
-        return cardDao.observeAllCards().map { entities ->
-            entities.map { it.toDomain() }
+        return preferencesRepository.observeActiveCollectionId().flatMapLatest { collectionId ->
+            cardDao.observeAllCards(collectionId).map { entities ->
+                entities.map { it.toDomain() }
+            }
         }.flowOn(dispatchers.io)
     }
 
     override fun observeCardsByTags(tags: List<String>): Flow<List<Card>> {
         val cleanTags = tags.map { it.trim() }.filter { it.isNotEmpty() }
-        return if (cleanTags.isEmpty()) {
-            observeAllCards()
-        } else {
-            cardDao.observeCardsByTags(cleanTags, cleanTags.size).map { entities ->
-                entities.map { it.toDomain() }
-            }.flowOn(dispatchers.io)
-        }
+        return preferencesRepository.observeActiveCollectionId().flatMapLatest { collectionId ->
+            if (cleanTags.isEmpty()) {
+                cardDao.observeAllCards(collectionId).map { entities ->
+                    entities.map { it.toDomain() }
+                }
+            } else {
+                cardDao.observeCardsByTags(collectionId, cleanTags, cleanTags.size).map { entities ->
+                    entities.map { it.toDomain() }
+                }
+            }
+        }.flowOn(dispatchers.io)
     }
 
     override fun observeAllTags(): Flow<List<String>> {
-        return cardDao.observeAllTags().flowOn(dispatchers.io)
+        return preferencesRepository.observeActiveCollectionId().flatMapLatest { collectionId ->
+            cardDao.observeAllTags(collectionId)
+        }.flowOn(dispatchers.io)
     }
 
     override fun searchTags(query: String): Flow<List<String>> {
-        return cardDao.searchTags(query.trim()).flowOn(dispatchers.io)
+        return preferencesRepository.observeActiveCollectionId().flatMapLatest { collectionId ->
+            cardDao.searchTags(collectionId, query.trim())
+        }.flowOn(dispatchers.io)
     }
 
     override fun observeCardWithContext(cardId: String): Flow<CardWithContext?> {
@@ -111,12 +127,21 @@ class CardRepositoryImpl @Inject constructor(
     }
 
     override suspend fun getCardByTitle(title: String): Card? = withContext(dispatchers.io) {
-        cardDao.getCardByExactTitle(title)?.toDomain()
+        val collectionId = preferencesRepository.getActiveCollectionId()
+        cardDao.getCardByExactTitle(collectionId, title)?.toDomain()
     }
 
     override suspend fun saveCard(card: Card, units: List<ContextUnit>): Unit = withContext(dispatchers.io) {
+        val activeCollectionId = preferencesRepository.getActiveCollectionId()
+        val targetCollectionId = if (card.collectionId.isNotBlank() && card.collectionId != CardCollection.DEFAULT_ID) {
+            card.collectionId
+        } else {
+            activeCollectionId
+        }
+
         database.withTransaction {
             val existingCard = cardDao.getCardById(card.id)
+            val effectiveCollectionId = existingCard?.collectionId ?: targetCollectionId
 
             // If the card title was renamed, propagate title change to other cards' mentioning units
             if (existingCard != null && !existingCard.title.equals(card.title, ignoreCase = false)) {
@@ -134,7 +159,7 @@ class CardRepositoryImpl @Inject constructor(
             }
 
             // Upsert card
-            val cardEntity = CardEntity.fromDomain(card)
+            val cardEntity = CardEntity.fromDomain(card.copy(collectionId = effectiveCollectionId))
             cardDao.upsertCard(cardEntity)
 
             // Sync card tags
@@ -166,7 +191,8 @@ class CardRepositoryImpl @Inject constructor(
                 for (unit in unitEntities) {
                     val targetRefs = MentionTokenizer.extractReferences(unit.rawText)
                     for (target in targetRefs) {
-                        var targetCard = cardDao.getCardById(target) ?: cardDao.getCardByExactTitle(target)
+                        var targetCard = cardDao.getCardById(target)
+                            ?: cardDao.getCardByExactTitle(effectiveCollectionId, target)
                         if (targetCard == null) {
                             val cleanTitle = target.trim()
                             if (cleanTitle.isNotEmpty()) {
@@ -178,7 +204,8 @@ class CardRepositoryImpl @Inject constructor(
                                     type = null,
                                     tagsCsv = "",
                                     createdAt = now,
-                                    updatedAt = now
+                                    updatedAt = now,
+                                    collectionId = effectiveCollectionId
                                 )
                                 cardDao.upsertCard(stub)
                                 targetCard = stub
@@ -205,17 +232,19 @@ class CardRepositoryImpl @Inject constructor(
     }
 
     override suspend fun autocompleteCards(query: String, excludeCardId: String?, limit: Int): List<Card> = withContext(dispatchers.io) {
+        val collectionId = preferencesRepository.getActiveCollectionId()
         val trimmed = query.trim()
         val entities = if (excludeCardId != null) {
-            cardDao.autocompleteCards(trimmed, excludeCardId, limit)
+            cardDao.autocompleteCards(collectionId, trimmed, excludeCardId, limit)
         } else {
-            cardDao.autocompleteCardsAll(trimmed, limit)
+            cardDao.autocompleteCardsAll(collectionId, trimmed, limit)
         }
         entities.map { it.toDomain() }
     }
 
     override suspend fun getCardCount(): Int = withContext(dispatchers.io) {
-        cardDao.getCardCount()
+        val collectionId = preferencesRepository.getActiveCollectionId()
+        cardDao.getCardCount(collectionId)
     }
 
     private fun ContextUnitEntity.toDomain(): ContextUnit {

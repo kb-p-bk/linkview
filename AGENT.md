@@ -34,10 +34,11 @@ LinkView is an offline-first, bidirectional linked note-taking application desig
 
 ## 2. Core Invariants & Architectural Rules
 
-### Card Title Uniqueness
-- Every card title in LinkView must be unique (case-insensitive).
+### Card Title Uniqueness & Collection Isolation
+- Card title uniqueness is scoped per collection (case-insensitive).
 - When a user saves or renames a card, check `checkDuplicateTitleUseCase`.
-- When cards are created via mentions or imported from JSON, always reuse `existingCard.id` if a card with the same title already exists. Never generate a new UUID for an existing title.
+- Different collections/rooms are fully isolated contexts: cards, tags, backlinks, searches, and exports/imports operate exclusively within the active collection.
+- When cards are created via mentions or imported from JSON, always reuse `existingCard.id` if a card with the same title already exists in the same collection. Never generate a new UUID for an existing title.
 
 ### Two-Pass Import Algorithm
 - When importing JSON (whether a full system backup or human-readable array):
@@ -88,28 +89,34 @@ LinkView is an offline-first, bidirectional linked note-taking application desig
 
 ---
 
-## 4. Local SQLite Database Schema
+## 4. Local SQLite Database Schema (Version 3)
 
 The database file is located at `/data/data/com.linkview.app/databases/linkview.db`.
 
-1. **`cards`**:
+1. **`collections`**:
+   - `id`: TEXT (UUID, Primary Key, default room id is `"default"`)
+   - `name`: TEXT (Unique, NOCASE)
+   - `createdAt`: INTEGER
+   - `updatedAt`: INTEGER
+2. **`cards`**:
    - `id`: TEXT (UUID, Primary Key)
    - `title`: TEXT (Collate NOCASE, indexed)
    - `type`: TEXT (Nullable)
    - `tagsCsv`: TEXT
    - `createdAt`: INTEGER
    - `updatedAt`: INTEGER
-2. **`context_units`**:
+   - `collectionId`: TEXT (Foreign Key -> `collections(id)`, `ON DELETE CASCADE`, indexed, default `"default"`)
+3. **`context_units`**:
    - `id`: TEXT (UUID, Primary Key)
    - `source_card_id`: TEXT (Foreign Key -> `cards(id)`, `ON DELETE CASCADE`)
    - `sort_order`: INTEGER
    - `raw_text`: TEXT
    - `plain_text`: TEXT
-3. **`unit_references`** (Junction Table):
+4. **`unit_references`** (Junction Table):
    - `unit_id`: TEXT (Foreign Key -> `context_units(id)`, `ON DELETE CASCADE`)
    - `target_card_id`: TEXT (Foreign Key -> `cards(id)`, `ON DELETE CASCADE`)
    - Primary Key: `(unit_id, target_card_id)`
-4. **`card_tags`**:
+5. **`card_tags`**:
    - `card_id`: TEXT (Foreign Key -> `cards(id)`, `ON DELETE CASCADE`)
    - `tag`: TEXT
    - Primary Key: `(card_id, tag)`

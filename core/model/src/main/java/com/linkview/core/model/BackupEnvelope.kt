@@ -6,6 +6,7 @@ import kotlinx.serialization.Serializable
 data class BackupEnvelope(
     val schemaVersion: Int = 1,
     val exportedAt: String = "",
+    val collections: List<CardCollection> = emptyList(),
     val cards: List<BackupCard> = emptyList()
 )
 
@@ -24,6 +25,7 @@ data class BackupCard(
     val type: String? = null,
     val createdAt: Long = 0L,
     val updatedAt: Long = 0L,
+    val collectionId: String = CardCollection.DEFAULT_ID,
     val contextUnits: List<BackupUnit> = emptyList(),
     val units: List<String> = emptyList()
 ) {

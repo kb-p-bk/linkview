@@ -12,7 +12,8 @@ An interactive SQL query console for advanced users to inspect and query the loc
 
 #### 2. Schema Reference Sheet
 - Collapsible side panel or drawer showing the full relational schema:
-  - `cards`: `id` (TEXT PK), `title` (TEXT NOCASE), `type` (TEXT), `tagsCsv` (TEXT), `createdAt` (INTEGER), `updatedAt` (INTEGER)
+  - `collections`: `id` (TEXT PK), `name` (TEXT NOCASE), `createdAt` (INTEGER), `updatedAt` (INTEGER)
+  - `cards`: `id` (TEXT PK), `title` (TEXT NOCASE), `type` (TEXT), `tagsCsv` (TEXT), `createdAt` (INTEGER), `updatedAt` (INTEGER), `collectionId` (TEXT FK)
   - `context_units`: `id` (TEXT PK), `source_card_id` (TEXT FK), `sort_order` (INTEGER), `raw_text` (TEXT), `plain_text` (TEXT)
   - `unit_references`: `unit_id` (TEXT FK), `target_card_id` (TEXT FK)
   - `card_tags`: `card_id` (TEXT FK), `tag` (TEXT)

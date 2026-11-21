@@ -9,7 +9,8 @@ data class Card(
     val tags: List<String> = emptyList(),
     val type: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
-    val updatedAt: Long = System.currentTimeMillis()
+    val updatedAt: Long = System.currentTimeMillis(),
+    val collectionId: String = CardCollection.DEFAULT_ID
 ) {
     /**
      * Normalized list of all tags for this card, combining [tags] and legacy [type].

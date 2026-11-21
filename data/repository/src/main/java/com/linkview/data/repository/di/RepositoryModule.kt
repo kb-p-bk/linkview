@@ -4,10 +4,12 @@ import com.linkview.core.common.DefaultDispatcherProvider
 import com.linkview.core.common.DispatcherProvider
 import com.linkview.data.backup.BackupRepositoryImpl
 import com.linkview.data.repository.CardRepositoryImpl
+import com.linkview.data.repository.CollectionRepositoryImpl
 import com.linkview.data.repository.PreferencesRepositoryImpl
 import com.linkview.data.repository.SearchRepositoryImpl
 import com.linkview.domain.repository.BackupRepository
 import com.linkview.domain.repository.CardRepository
+import com.linkview.domain.repository.CollectionRepository
 import com.linkview.domain.repository.PreferencesRepository
 import com.linkview.domain.repository.SearchRepository
 import com.linkview.domain.usecase.AutocompleteCardsUseCase
@@ -46,6 +48,10 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindBackupRepository(impl: BackupRepositoryImpl): BackupRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindCollectionRepository(impl: CollectionRepositoryImpl): CollectionRepository
 
     companion object {
         @Provides

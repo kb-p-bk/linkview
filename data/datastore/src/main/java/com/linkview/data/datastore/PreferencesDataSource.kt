@@ -6,9 +6,11 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.linkview.core.model.CardCollection
 import com.linkview.core.model.SearchScope
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -20,6 +22,7 @@ class PreferencesDataSource @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
     private val keySearchScope = stringPreferencesKey("search_scope")
+    private val keyActiveCollectionId = stringPreferencesKey("active_collection_id")
 
     val searchScope: Flow<SearchScope> = context.dataStore.data.map { preferences ->
         val scopeName = preferences[keySearchScope] ?: SearchScope.TITLE_AND_CONTEXT.name
@@ -33,6 +36,21 @@ class PreferencesDataSource @Inject constructor(
     suspend fun setSearchScope(scope: SearchScope) {
         context.dataStore.edit { preferences ->
             preferences[keySearchScope] = scope.name
+        }
+    }
+
+    val activeCollectionId: Flow<String> = context.dataStore.data.map { preferences ->
+        preferences[keyActiveCollectionId] ?: CardCollection.DEFAULT_ID
+    }
+
+    suspend fun getActiveCollectionId(): String {
+        return activeCollectionId.first()
+    }
+
+    suspend fun setActiveCollectionId(collectionId: String) {
+        val cleanId = collectionId.trim().ifBlank { CardCollection.DEFAULT_ID }
+        context.dataStore.edit { preferences ->
+            preferences[keyActiveCollectionId] = cleanId
         }
     }
 }

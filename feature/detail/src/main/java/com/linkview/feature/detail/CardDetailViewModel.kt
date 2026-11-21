@@ -95,13 +95,15 @@ class CardDetailViewModel @Inject constructor(
             // Get existing card to preserve timestamps or properties
             val existing = cardRepository.getCardById(targetCardId)
             val createdAt = existing?.createdAt ?: System.currentTimeMillis()
+            val collectionId = existing?.collectionId ?: com.linkview.core.model.CardCollection.DEFAULT_ID
             val domainCard = Card(
                 id = targetCardId,
                 title = newTitle,
                 tags = backupCard.allTags,
                 type = backupCard.type?.trim()?.ifBlank { null } ?: backupCard.allTags.firstOrNull(),
                 createdAt = createdAt,
-                updatedAt = System.currentTimeMillis()
+                updatedAt = System.currentTimeMillis(),
+                collectionId = collectionId
             )
 
             // Extract units: support both units (List<String>) and contextUnits (List<BackupUnit>)

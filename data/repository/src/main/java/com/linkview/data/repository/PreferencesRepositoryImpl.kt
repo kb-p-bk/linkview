@@ -23,4 +23,16 @@ class PreferencesRepositoryImpl @Inject constructor(
     override suspend fun setSearchScope(scope: SearchScope) = withContext(dispatchers.io) {
         preferencesDataSource.setSearchScope(scope)
     }
+
+    override fun observeActiveCollectionId(): Flow<String> {
+        return preferencesDataSource.activeCollectionId.flowOn(dispatchers.io)
+    }
+
+    override suspend fun getActiveCollectionId(): String = withContext(dispatchers.io) {
+        preferencesDataSource.getActiveCollectionId()
+    }
+
+    override suspend fun setActiveCollectionId(id: String) = withContext(dispatchers.io) {
+        preferencesDataSource.setActiveCollectionId(id)
+    }
 }

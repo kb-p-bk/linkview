@@ -11,6 +11,7 @@ import com.linkview.core.model.BackupCard
 import com.linkview.core.model.BackupEnvelope
 import com.linkview.core.model.BackupUnit
 import com.linkview.core.model.Card
+import com.linkview.core.model.CardCollection
 import com.linkview.core.model.ImportMode
 import com.linkview.core.model.ImportSummary
 import com.linkview.data.database.LinkViewDatabase
@@ -22,6 +23,7 @@ import com.linkview.data.database.entity.CardTagEntity
 import com.linkview.data.database.entity.ContextUnitEntity
 import com.linkview.data.database.entity.UnitReferenceEntity
 import com.linkview.domain.repository.BackupRepository
+import com.linkview.domain.repository.PreferencesRepository
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -36,13 +38,15 @@ class BackupRepositoryImpl @Inject constructor(
     private val cardDao: CardDao,
     private val contextUnitDao: ContextUnitDao,
     private val unitReferenceDao: UnitReferenceDao,
+    private val preferencesRepository: PreferencesRepository,
     private val serializer: JsonBackupSerializer,
     private val dispatchers: DispatcherProvider
 ) : BackupRepository {
 
     override suspend fun exportJson(): Result<String> = withContext(dispatchers.io) {
         runCatchingResult {
-            val allCards = cardDao.getAllCardsList()
+            val collectionId = preferencesRepository.getActiveCollectionId()
+            val allCards = cardDao.getAllCardsList(collectionId)
             val backupCards = allCards.map { card ->
                 val units = contextUnitDao.getUnitsForCard(card.id)
                 val backupUnits = units.map { unit ->
@@ -62,6 +66,7 @@ class BackupRepositoryImpl @Inject constructor(
                     type = card.type,
                     createdAt = card.createdAt,
                     updatedAt = card.updatedAt,
+                    collectionId = card.collectionId,
                     contextUnits = backupUnits
                 )
             }
@@ -82,7 +87,8 @@ class BackupRepositoryImpl @Inject constructor(
 
     override suspend fun exportHumanReadableJson(): Result<String> = withContext(dispatchers.io) {
         runCatchingResult {
-            val allCards = cardDao.getAllCardsList()
+            val collectionId = preferencesRepository.getActiveCollectionId()
+            val allCards = cardDao.getAllCardsList(collectionId)
             val readableCards = allCards.map { card ->
                 val units = contextUnitDao.getUnitsForCard(card.id)
                 val domainCard = card.toDomain()
@@ -98,10 +104,11 @@ class BackupRepositoryImpl @Inject constructor(
 
     override suspend fun exportReferenceTitles(tags: List<String>): Result<List<String>> = withContext(dispatchers.io) {
         runCatchingResult {
+            val collectionId = preferencesRepository.getActiveCollectionId()
             if (tags.isEmpty()) {
-                cardDao.getAllTitles()
+                cardDao.getAllTitles(collectionId)
             } else {
-                cardDao.getTitlesByTags(tags)
+                cardDao.getTitlesByTags(collectionId, tags)
             }
         }
     }
@@ -113,13 +120,14 @@ class BackupRepositoryImpl @Inject constructor(
                 "Unsupported backup schema version: ${envelope.schemaVersion}"
             }
 
+            val collectionId = preferencesRepository.getActiveCollectionId()
             var cardsImported = 0
             var unitsImported = 0
             var refsCreated = 0
 
             database.withTransaction {
                 if (mode == ImportMode.REPLACE_ALL) {
-                    cardDao.deleteAllCards()
+                    cardDao.deleteAllCards(collectionId)
                 }
 
                 val now = System.currentTimeMillis()
@@ -132,7 +140,7 @@ class BackupRepositoryImpl @Inject constructor(
                     if (cardTitle.isEmpty()) continue
 
                     val lowerTitle = cardTitle.lowercase()
-                    val existingCard = cardDao.getCardByExactTitle(cardTitle)
+                    val existingCard = cardDao.getCardByExactTitle(collectionId, cardTitle)
                     val cardId = when {
                         card.id.isNotBlank() -> card.id
                         existingCard != null -> existingCard.id
@@ -148,7 +156,8 @@ class BackupRepositoryImpl @Inject constructor(
                         tags = card.allTags,
                         type = card.type?.trim()?.ifBlank { null },
                         createdAt = createdAt,
-                        updatedAt = now
+                        updatedAt = now,
+                        collectionId = collectionId
                     )
                     cardDao.upsertCard(CardEntity.fromDomain(domainCard))
                     if (processedTitles.add(lowerTitle)) {
@@ -210,8 +219,8 @@ class BackupRepositoryImpl @Inject constructor(
                                 val cleanTarget = targetRef.trim()
                                 if (cleanTarget.isEmpty()) continue
 
-                                var targetCard = cardDao.getCardById(cleanTarget)
-                                    ?: cardDao.getCardByExactTitle(cleanTarget)
+                                var targetCard = cardDao.getCardById(cleanTarget)?.takeIf { it.collectionId == collectionId }
+                                    ?: cardDao.getCardByExactTitle(collectionId, cleanTarget)
                                     ?: titleToIdMap[cleanTarget.lowercase()]?.let { cardDao.getCardById(it) }
 
                                 if (targetCard == null) {
@@ -222,7 +231,8 @@ class BackupRepositoryImpl @Inject constructor(
                                         type = null,
                                         tagsCsv = "",
                                         createdAt = now,
-                                        updatedAt = now
+                                        updatedAt = now,
+                                        collectionId = collectionId
                                     )
                                     cardDao.upsertCard(stub)
                                     titleToIdMap[cleanTarget.lowercase()] = stubId

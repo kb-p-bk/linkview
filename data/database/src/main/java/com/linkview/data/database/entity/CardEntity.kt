@@ -2,13 +2,26 @@ package com.linkview.data.database.entity
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
+import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.linkview.core.model.Card
+import com.linkview.core.model.CardCollection
 
 @Entity(
     tableName = "cards",
-    indices = [Index(value = ["title"], name = "index_cards_title")]
+    foreignKeys = [
+        ForeignKey(
+            entity = CollectionEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["collectionId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [
+        Index(value = ["title"], name = "index_cards_title"),
+        Index(value = ["collectionId"], name = "index_cards_collectionId")
+    ]
 )
 data class CardEntity(
     @PrimaryKey
@@ -18,7 +31,9 @@ data class CardEntity(
     val type: String?,
     val tagsCsv: String = "",
     val createdAt: Long,
-    val updatedAt: Long
+    val updatedAt: Long,
+    @ColumnInfo(defaultValue = "default")
+    val collectionId: String = CardCollection.DEFAULT_ID
 ) {
     fun toDomain(): Card {
         val parsedTags = if (tagsCsv.isBlank()) {
@@ -38,7 +53,8 @@ data class CardEntity(
             tags = combined,
             type = type,
             createdAt = createdAt,
-            updatedAt = updatedAt
+            updatedAt = updatedAt,
+            collectionId = collectionId
         )
     }
 
@@ -51,7 +67,8 @@ data class CardEntity(
                 type = card.type ?: normalizedTags.firstOrNull(),
                 tagsCsv = normalizedTags.joinToString(","),
                 createdAt = card.createdAt,
-                updatedAt = card.updatedAt
+                updatedAt = card.updatedAt,
+                collectionId = card.collectionId.ifBlank { CardCollection.DEFAULT_ID }
             )
         }
     }

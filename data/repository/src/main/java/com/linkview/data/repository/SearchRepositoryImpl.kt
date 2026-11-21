@@ -9,6 +9,7 @@ import com.linkview.data.database.dao.ContextUnitDao
 import com.linkview.data.database.dao.UnitReferenceDao
 import com.linkview.data.database.entity.CardEntity
 import com.linkview.data.database.entity.ContextUnitEntity
+import com.linkview.domain.repository.PreferencesRepository
 import com.linkview.domain.repository.SearchRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -22,28 +23,28 @@ class SearchRepositoryImpl @Inject constructor(
     private val cardDao: CardDao,
     private val contextUnitDao: ContextUnitDao,
     private val unitReferenceDao: UnitReferenceDao,
+    private val preferencesRepository: PreferencesRepository,
     private val dispatchers: DispatcherProvider
 ) : SearchRepository {
 
     override fun search(query: String, scope: SearchScope): Flow<List<SearchResultItem>> = flow {
         val trimmed = query.trim()
         if (trimmed.isEmpty()) {
-            // Empty query: return all cards ordered by most recently updated
-            val allCards = cardDao.observeAllCards()
             emit(emptyList())
             return@flow
         }
 
+        val collectionId = preferencesRepository.getActiveCollectionId()
         val results = when (scope) {
-            SearchScope.TITLE_ONLY -> searchTitleOnly(trimmed)
-            SearchScope.CONTEXT_ONLY -> searchContextOnly(trimmed)
-            SearchScope.TITLE_AND_CONTEXT -> searchTitleAndContext(trimmed)
+            SearchScope.TITLE_ONLY -> searchTitleOnly(collectionId, trimmed)
+            SearchScope.CONTEXT_ONLY -> searchContextOnly(collectionId, trimmed)
+            SearchScope.TITLE_AND_CONTEXT -> searchTitleAndContext(collectionId, trimmed)
         }
         emit(results)
     }.flowOn(dispatchers.io)
 
-    private suspend fun searchTitleOnly(query: String): List<SearchResultItem> {
-        val cardEntities = cardDao.autocompleteCardsAll(query, limit = 100)
+    private suspend fun searchTitleOnly(collectionId: String, query: String): List<SearchResultItem> {
+        val cardEntities = cardDao.autocompleteCardsAll(collectionId, query, limit = 100)
         return cardEntities.map { cardEntity ->
             val incomingCount = unitReferenceDao.countIncomingBacklinks(cardEntity.id)
             val authoredUnits = contextUnitDao.getUnitsForCard(cardEntity.id)
@@ -55,13 +56,13 @@ class SearchRepositoryImpl @Inject constructor(
         }
     }
 
-    private suspend fun searchContextOnly(query: String): List<SearchResultItem> {
-        val matchingUnits = searchUnitsMatchingText(query)
+    private suspend fun searchContextOnly(collectionId: String, query: String): List<SearchResultItem> {
+        val matchingUnits = searchUnitsMatchingText(collectionId, query)
         val groupedBySource = matchingUnits.groupBy { it.sourceCardId }
 
         val results = mutableListOf<SearchResultItem>()
         for ((sourceCardId, units) in groupedBySource) {
-            val cardEntity = cardDao.getCardById(sourceCardId) ?: continue
+            val cardEntity = cardDao.getCardById(sourceCardId)?.takeIf { it.collectionId == collectionId } ?: continue
             val snippets = units.map { it.plainText }
             val incomingCount = unitReferenceDao.countIncomingBacklinks(sourceCardId)
             val allAuthored = contextUnitDao.getUnitsForCard(sourceCardId)
@@ -78,9 +79,9 @@ class SearchRepositoryImpl @Inject constructor(
         return results
     }
 
-    private suspend fun searchTitleAndContext(query: String): List<SearchResultItem> {
-        val titleMatches = cardDao.autocompleteCardsAll(query, limit = 100)
-        val matchingUnits = searchUnitsMatchingText(query)
+    private suspend fun searchTitleAndContext(collectionId: String, query: String): List<SearchResultItem> {
+        val titleMatches = cardDao.autocompleteCardsAll(collectionId, query, limit = 100)
+        val matchingUnits = searchUnitsMatchingText(collectionId, query)
         val unitsBySource = matchingUnits.groupBy { it.sourceCardId }
 
         val resultMap = LinkedHashMap<String, SearchResultItem>()
@@ -102,7 +103,7 @@ class SearchRepositoryImpl @Inject constructor(
         // 2. Add remaining context matches not already present
         for ((sourceCardId, units) in unitsBySource) {
             if (!resultMap.containsKey(sourceCardId)) {
-                val cardEntity = cardDao.getCardById(sourceCardId) ?: continue
+                val cardEntity = cardDao.getCardById(sourceCardId)?.takeIf { it.collectionId == collectionId } ?: continue
                 val snippets = units.map { it.plainText }
                 val incomingCount = unitReferenceDao.countIncomingBacklinks(sourceCardId)
                 val allAuthored = contextUnitDao.getUnitsForCard(sourceCardId)
@@ -119,10 +120,10 @@ class SearchRepositoryImpl @Inject constructor(
         return resultMap.values.toList()
     }
 
-    private suspend fun searchUnitsMatchingText(query: String): List<ContextUnitEntity> {
+    private suspend fun searchUnitsMatchingText(collectionId: String, query: String): List<ContextUnitEntity> {
         val allUnits = withContext(dispatchers.io) {
-            // Search via query matching plainText
-            val cards = cardDao.autocompleteCardsAll("", limit = 1000)
+            // Search via query matching plainText for cards in active collection
+            val cards = cardDao.autocompleteCardsAll(collectionId, "", limit = 1000)
             val matches = mutableListOf<ContextUnitEntity>()
             for (card in cards) {
                 val units = contextUnitDao.getUnitsForCard(card.id)

@@ -156,6 +156,19 @@ private fun TabletResponsiveLayout(
             onNavigateToBackup = {
                 editingCardId = null
                 isShowingBackup = true
+            },
+            onSelectCollection = {
+                activeCardId = null
+                cardJumpHistory.clear()
+                cardsViewModel.selectCollection(it)
+            },
+            onCreateCollection = {
+                cardsViewModel.createCollection(it)
+            },
+            onDeleteCollection = {
+                activeCardId = null
+                cardJumpHistory.clear()
+                cardsViewModel.deleteCollection(it)
             }
         )
 

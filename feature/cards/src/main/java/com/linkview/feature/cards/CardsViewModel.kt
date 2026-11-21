@@ -2,8 +2,11 @@ package com.linkview.feature.cards
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.linkview.core.common.Result
+import com.linkview.core.model.CardCollection
 import com.linkview.core.model.SearchScope
 import com.linkview.domain.repository.CardRepository
+import com.linkview.domain.repository.CollectionRepository
 import com.linkview.domain.repository.PreferencesRepository
 import com.linkview.domain.usecase.SearchCardsUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -29,6 +32,7 @@ private val DEFAULT_CARD_TYPES = listOf("Person", "Event", "Concept", "Place", "
 class CardsViewModel @Inject constructor(
     private val cardRepository: CardRepository,
     private val preferencesRepository: PreferencesRepository,
+    private val collectionRepository: CollectionRepository,
     private val searchCardsUseCase: SearchCardsUseCase
 ) : ViewModel() {
 
@@ -38,6 +42,20 @@ class CardsViewModel @Inject constructor(
     private val searchQueryFlow = MutableStateFlow("")
 
     init {
+        // Observe all collections
+        viewModelScope.launch {
+            collectionRepository.observeAllCollections().collect { collections ->
+                _uiState.update { it.copy(collections = collections) }
+            }
+        }
+
+        // Observe active collection ID
+        viewModelScope.launch {
+            collectionRepository.observeActiveCollectionId().collect { activeId ->
+                _uiState.update { it.copy(activeCollectionId = activeId, displayLimit = 1000) }
+            }
+        }
+
         // Observe all cards
         viewModelScope.launch {
             cardRepository.observeAllCards().collect { cards ->
@@ -142,5 +160,36 @@ class CardsViewModel @Inject constructor(
 
     fun selectCard(cardId: String?) {
         _uiState.update { it.copy(selectedCardId = cardId) }
+    }
+
+    fun selectCollection(id: String) {
+        viewModelScope.launch {
+            collectionRepository.setActiveCollectionId(id)
+            _uiState.update { it.copy(selectedTags = emptySet(), tagSearchQuery = "", displayLimit = 1000, selectedCardId = null) }
+        }
+    }
+
+    fun createCollection(name: String, onCreated: ((CardCollection) -> Unit)? = null) {
+        viewModelScope.launch {
+            when (val result = collectionRepository.createCollection(name)) {
+                is Result.Success -> {
+                    onCreated?.invoke(result.data)
+                }
+                is Result.Error -> Unit
+                is Result.Loading -> Unit
+            }
+        }
+    }
+
+    fun renameCollection(id: String, name: String) {
+        viewModelScope.launch {
+            collectionRepository.renameCollection(id, name)
+        }
+    }
+
+    fun deleteCollection(id: String) {
+        viewModelScope.launch {
+            collectionRepository.deleteCollection(id)
+        }
     }
 }
