@@ -173,6 +173,15 @@ class CardEditorViewModel @Inject constructor(
         }
     }
 
+    fun insertContextUnitAfter(index: Int) {
+        _uiState.update { state ->
+            val updated = state.units.toMutableList()
+            val insertIndex = (index + 1).coerceIn(0, updated.size)
+            updated.add(insertIndex, EditableUnit())
+            state.copy(units = updated)
+        }
+    }
+
     fun removeContextUnit(index: Int) {
         _uiState.update { state ->
             val updated = state.units.toMutableList()

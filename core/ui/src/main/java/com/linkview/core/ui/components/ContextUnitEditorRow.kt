@@ -69,6 +69,7 @@ fun ContextUnitEditorRow(
     onSelectMention: (Card) -> Unit,
     onQuickCreateMention: (String) -> Unit,
     modifier: Modifier = Modifier,
+    onInsertBelow: (() -> Unit)? = null,
     onSave: (() -> Unit)? = null,
     onCancel: (() -> Unit)? = null,
     isSaving: Boolean = false
@@ -102,7 +103,7 @@ fun ContextUnitEditorRow(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            // Header Row: Unit number and Actions (Move Up, Move Down, Delete)
+            // Header Row: Unit number and Actions (Move Up, Move Down, Insert Below, Delete)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -137,6 +138,19 @@ fun ContextUnitEditorRow(
                             modifier = Modifier.size(18.dp),
                             tint = if (index < totalUnits - 1) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
                         )
+                    }
+                    if (onInsertBelow != null) {
+                        IconButton(
+                            onClick = onInsertBelow,
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Add,
+                                contentDescription = "Insert unit below",
+                                modifier = Modifier.size(18.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
                     }
                     IconButton(
                         onClick = onDelete,

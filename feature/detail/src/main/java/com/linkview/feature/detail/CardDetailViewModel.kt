@@ -138,6 +138,66 @@ class CardDetailViewModel @Inject constructor(
         }
     }
 
+    fun insertUnitBelow(index: Int) {
+        val currentUnits = _uiState.value.cardWithContext?.authoredUnits.orEmpty()
+        val editable = if (currentUnits.isNotEmpty()) {
+            currentUnits.map {
+                EditableUnit(id = it.id, rawText = MentionTokenizer.stripCardUuids(it.rawText))
+            }.toMutableList()
+        } else {
+            mutableListOf()
+        }
+
+        val insertIndex = (index + 1).coerceIn(0, editable.size)
+        editable.add(insertIndex, EditableUnit())
+
+        _uiState.update {
+            it.copy(
+                editingUnitIndex = insertIndex,
+                editableUnits = editable,
+                activeMentionQuery = null,
+                mentionSuggestions = emptyList()
+            )
+        }
+    }
+
+    fun insertUnitAbove(index: Int) {
+        val currentUnits = _uiState.value.cardWithContext?.authoredUnits.orEmpty()
+        val editable = if (currentUnits.isNotEmpty()) {
+            currentUnits.map {
+                EditableUnit(id = it.id, rawText = MentionTokenizer.stripCardUuids(it.rawText))
+            }.toMutableList()
+        } else {
+            mutableListOf()
+        }
+
+        val insertIndex = index.coerceIn(0, editable.size)
+        editable.add(insertIndex, EditableUnit())
+
+        _uiState.update {
+            it.copy(
+                editingUnitIndex = insertIndex,
+                editableUnits = editable,
+                activeMentionQuery = null,
+                mentionSuggestions = emptyList()
+            )
+        }
+    }
+
+    fun insertUnitAfterEditing(index: Int) {
+        val current = _uiState.value.editableUnits.toMutableList()
+        val insertIndex = (index + 1).coerceIn(0, current.size)
+        current.add(insertIndex, EditableUnit())
+        _uiState.update {
+            it.copy(
+                editableUnits = current,
+                editingUnitIndex = insertIndex,
+                activeMentionQuery = null,
+                mentionSuggestions = emptyList()
+            )
+        }
+    }
+
     fun cancelEditingUnit() {
         mentionQueryFlow.value = null
         _uiState.update {

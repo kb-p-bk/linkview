@@ -405,6 +405,7 @@ fun CardEditorScreen(
                         },
                         onMoveUp = { viewModel.moveContextUnit(index, index - 1) },
                         onMoveDown = { viewModel.moveContextUnit(index, index + 1) },
+                        onInsertBelow = { viewModel.insertContextUnitAfter(index) },
                         onDelete = { viewModel.removeContextUnit(index) },
                         onSelectMention = { card -> viewModel.selectMention(card) },
                         onQuickCreateMention = { title -> viewModel.quickCreateAndSelectMention(title) }

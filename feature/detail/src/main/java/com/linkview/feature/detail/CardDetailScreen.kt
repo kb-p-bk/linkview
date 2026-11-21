@@ -22,6 +22,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.ContentCopy
@@ -246,6 +247,7 @@ fun CardDetailScreen(
                                         },
                                         onMoveUp = { viewModel.moveEditingUnit(index, index - 1) },
                                         onMoveDown = { viewModel.moveEditingUnit(index, index + 1) },
+                                        onInsertBelow = { viewModel.insertUnitAfterEditing(index) },
                                         onDelete = { viewModel.deleteEditingUnit(index) },
                                         onSelectMention = { card -> viewModel.selectMention(card) },
                                         onQuickCreateMention = { title -> viewModel.quickCreateAndSelectMention(title) },
@@ -256,9 +258,12 @@ fun CardDetailScreen(
                                 }
                             } else {
                                 ReadOnlyUnitCard(
+                                    index = index,
                                     rawText = editableUnit.rawText,
                                     onNavigateToCard = onNavigateToCard,
-                                    onEdit = { viewModel.startEditingUnit(index) }
+                                    onEdit = { viewModel.startEditingUnit(index) },
+                                    onInsertBelow = { viewModel.insertUnitAfterEditing(index) },
+                                    onInsertAbove = { viewModel.insertUnitAbove(index) }
                                 )
                             }
                         }
@@ -266,9 +271,12 @@ fun CardDetailScreen(
                         // All units in normal read mode
                         cardWithContext.authoredUnits.forEachIndexed { index, unit ->
                             ReadOnlyUnitCard(
+                                index = index,
                                 rawText = unit.rawText,
                                 onNavigateToCard = onNavigateToCard,
-                                onEdit = { viewModel.startEditingUnit(index) }
+                                onEdit = { viewModel.startEditingUnit(index) },
+                                onInsertBelow = { viewModel.insertUnitBelow(index) },
+                                onInsertAbove = { viewModel.insertUnitAbove(index) }
                             )
                         }
                     }
@@ -450,9 +458,12 @@ fun CardDetailScreen(
 
 @Composable
 private fun ReadOnlyUnitCard(
+    index: Int,
     rawText: String,
     onNavigateToCard: (String) -> Unit,
     onEdit: () -> Unit,
+    onInsertBelow: () -> Unit,
+    onInsertAbove: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -464,21 +475,22 @@ private fun ReadOnlyUnitCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            SelectionContainer {
-                RichMentionText(
-                    rawText = rawText,
-                    onCardClick = onNavigateToCard
-                )
-            }
-
+            // Top Row: Unit index on top-left, Three-dots menu on top-right
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                Text(
+                    text = "#${index + 1}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                )
+
                 Box {
                     IconButton(
                         onClick = { isMenuExpanded = true },
-                        modifier = Modifier.size(28.dp)
+                        modifier = Modifier.size(24.dp)
                     ) {
                         Icon(
                             Icons.Default.MoreVert,
@@ -503,6 +515,26 @@ private fun ReadOnlyUnitCard(
                             }
                         )
                         DropdownMenuItem(
+                            text = { Text("Add unit below") },
+                            leadingIcon = {
+                                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                            },
+                            onClick = {
+                                isMenuExpanded = false
+                                onInsertBelow()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Add unit above") },
+                            leadingIcon = {
+                                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                            },
+                            onClick = {
+                                isMenuExpanded = false
+                                onInsertAbove()
+                            }
+                        )
+                        DropdownMenuItem(
                             text = { Text("Copy") },
                             leadingIcon = {
                                 Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -515,6 +547,15 @@ private fun ReadOnlyUnitCard(
                         )
                     }
                 }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            SelectionContainer {
+                RichMentionText(
+                    rawText = rawText,
+                    onCardClick = onNavigateToCard
+                )
             }
         }
     }
