@@ -171,15 +171,11 @@ private fun TabletResponsiveLayout(
                 .fillMaxWidth()
                 .weight(1f)
         ) {
-            // Left area: Cards Grid (~38% when detail open)
+            // Left area: Cards Grid (~38% when detail open, full width when closed)
             Box(
-                modifier = if (isDetailOpen) {
-                    Modifier
-                        .weight(0.38f)
-                        .fillMaxHeight()
-                } else {
-                    Modifier.fillMaxSize()
-                }
+                modifier = Modifier
+                    .weight(if (isDetailOpen) 0.38f else 1f)
+                    .fillMaxHeight()
             ) {
                 CardsGridContent(
                     uiState = uiState,

@@ -307,11 +307,15 @@ fun CardsGridContent(
     onLoadMore: () -> Unit = {}
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
-        val minCardSize = 220.dp
-        val horizontalSpacing = 10.dp
-        val padding = 32.dp // 16.dp each side
-        val availableWidth = maxWidth - padding
-        val columns = maxOf(1, ((availableWidth + horizontalSpacing) / (minCardSize + horizontalSpacing)).toInt())
+        val columns = if (maxWidth < 540.dp) {
+            1
+        } else {
+            val minCardSize = 260.dp
+            val horizontalSpacing = 10.dp
+            val padding = 32.dp // 16.dp each side
+            val availableWidth = maxWidth - padding
+            maxOf(1, ((availableWidth + horizontalSpacing) / (minCardSize + horizontalSpacing)).toInt())
+        }
 
         val listState = rememberLazyListState()
 
@@ -355,7 +359,7 @@ fun CardsGridContent(
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    items(rows, key = { row -> row.first().card.id }) { rowItems ->
+                    items(rows, key = { row -> "${columns}_${row.first().card.id}" }) { rowItems ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -448,7 +452,7 @@ fun CardsGridContent(
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    items(rows, key = { row -> row.first().id }) { rowCards ->
+                    items(rows, key = { row -> "${columns}_${row.first().id}" }) { rowCards ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
