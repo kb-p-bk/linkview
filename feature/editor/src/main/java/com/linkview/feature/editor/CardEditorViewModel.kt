@@ -1,0 +1,252 @@
+package com.linkview.feature.editor
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.linkview.core.common.Result
+import com.linkview.core.common.mention.MentionTokenizer
+import com.linkview.core.model.Card
+import com.linkview.core.model.ContextUnit
+import com.linkview.domain.repository.CardRepository
+import com.linkview.domain.usecase.AutocompleteCardsUseCase
+import com.linkview.domain.usecase.CheckDuplicateTitleUseCase
+import com.linkview.domain.usecase.GetCardDetailWithBacklinksUseCase
+import com.linkview.domain.usecase.SaveCardUseCase
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import java.util.UUID
+import javax.inject.Inject
+
+@HiltViewModel
+class CardEditorViewModel @Inject constructor(
+    private val saveCardUseCase: SaveCardUseCase,
+    private val getCardDetailUseCase: GetCardDetailWithBacklinksUseCase,
+    private val checkDuplicateTitleUseCase: CheckDuplicateTitleUseCase,
+    private val autocompleteCardsUseCase: AutocompleteCardsUseCase,
+    private val cardRepository: CardRepository
+) : ViewModel() {
+
+    private val _uiState = MutableStateFlow(CardEditorUiState())
+    val uiState: StateFlow<CardEditorUiState> = _uiState.asStateFlow()
+
+    fun loadCard(cardId: String?) {
+        if (cardId == null) {
+            _uiState.update { it.copy(cardId = null, title = "", type = "", units = listOf(EditableUnit())) }
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, cardId = cardId) }
+            val cardWithContext = getCardDetailUseCase.getOnce(cardId)
+            if (cardWithContext != null) {
+                val editableUnits = if (cardWithContext.authoredUnits.isNotEmpty()) {
+                    cardWithContext.authoredUnits.map {
+                        EditableUnit(id = it.id, rawText = it.rawText)
+                    }
+                } else {
+                    listOf(EditableUnit())
+                }
+                _uiState.update {
+                    it.copy(
+                        cardId = cardWithContext.card.id,
+                        title = cardWithContext.card.title,
+                        type = cardWithContext.card.type.orEmpty(),
+                        units = editableUnits,
+                        isLoading = false
+                    )
+                }
+            } else {
+                _uiState.update { it.copy(isLoading = false, errorMessage = "Card not found") }
+            }
+        }
+    }
+
+    fun onTitleChanged(newTitle: String) {
+        _uiState.update { it.copy(title = newTitle, errorMessage = null) }
+        viewModelScope.launch {
+            val duplicate = checkDuplicateTitleUseCase(newTitle, excludeCardId = _uiState.value.cardId)
+            _uiState.update { it.copy(duplicateCard = duplicate) }
+        }
+    }
+
+    fun onTypeSelected(newType: String) {
+        _uiState.update { it.copy(type = newType) }
+    }
+
+    fun addContextUnit() {
+        _uiState.update { state ->
+            state.copy(units = state.units + EditableUnit())
+        }
+    }
+
+    fun removeContextUnit(index: Int) {
+        _uiState.update { state ->
+            val updated = state.units.toMutableList()
+            if (index in updated.indices) {
+                updated.removeAt(index)
+            }
+            if (updated.isEmpty()) {
+                updated.add(EditableUnit())
+            }
+            state.copy(
+                units = updated,
+                activeMentionQuery = if (state.activeUnitIndex == index) null else state.activeMentionQuery,
+                activeUnitIndex = if (state.activeUnitIndex == index) null else state.activeUnitIndex
+            )
+        }
+    }
+
+    fun moveContextUnit(fromIndex: Int, toIndex: Int) {
+        _uiState.update { state ->
+            val updated = state.units.toMutableList()
+            if (fromIndex in updated.indices && toIndex in updated.indices) {
+                val item = updated.removeAt(fromIndex)
+                updated.add(toIndex, item)
+            }
+            state.copy(units = updated)
+        }
+    }
+
+    fun onUnitTextChanged(index: Int, text: String, cursorPosition: Int) {
+        _uiState.update { state ->
+            val updated = state.units.toMutableList()
+            if (index in updated.indices) {
+                updated[index] = updated[index].copy(rawText = text)
+            }
+            state.copy(units = updated)
+        }
+
+        // Detect @ mention query right before cursor
+        val safeCursor = cursorPosition.coerceIn(0, text.length)
+        val textBeforeCursor = text.substring(0, safeCursor)
+        val atIndex = textBeforeCursor.lastIndexOf('@')
+
+        if (atIndex != -1) {
+            val queryCandidate = textBeforeCursor.substring(atIndex + 1)
+            // Query is valid if it doesn't cross newlines or closing bracket/parenthesis
+            if (!queryCandidate.contains('\n') && !queryCandidate.contains(']') && queryCandidate.length < 40) {
+                _uiState.update {
+                    it.copy(
+                        activeMentionQuery = queryCandidate,
+                        activeUnitIndex = index
+                    )
+                }
+                viewModelScope.launch {
+                    val suggestions = autocompleteCardsUseCase(
+                        query = queryCandidate,
+                        excludeCardId = _uiState.value.cardId,
+                        limit = 8
+                    )
+                    _uiState.update { it.copy(mentionSuggestions = suggestions) }
+                }
+                return
+            }
+        }
+
+        // Dismiss suggestions if not in a valid mention
+        _uiState.update {
+            it.copy(
+                activeMentionQuery = null,
+                activeUnitIndex = null,
+                mentionSuggestions = emptyList()
+            )
+        }
+    }
+
+    fun selectMention(card: Card) {
+        val activeIndex = _uiState.value.activeUnitIndex ?: return
+        val currentUnits = _uiState.value.units
+        if (activeIndex !in currentUnits.indices) return
+
+        val text = currentUnits[activeIndex].rawText
+        val atIndex = text.lastIndexOf('@')
+        if (atIndex == -1) return
+
+        val token = MentionTokenizer.formatToken(card.title, card.id) + " "
+        val newText = text.substring(0, atIndex) + token
+
+        _uiState.update { state ->
+            val updated = state.units.toMutableList()
+            updated[activeIndex] = updated[activeIndex].copy(rawText = newText)
+            state.copy(
+                units = updated,
+                activeMentionQuery = null,
+                activeUnitIndex = null,
+                mentionSuggestions = emptyList()
+            )
+        }
+    }
+
+    fun quickCreateAndSelectMention(stubTitle: String) {
+        val trimmed = stubTitle.trim()
+        if (trimmed.isEmpty()) return
+
+        viewModelScope.launch {
+            val stubId = UUID.randomUUID().toString()
+            val stubCard = Card(
+                id = stubId,
+                title = trimmed,
+                createdAt = System.currentTimeMillis(),
+                updatedAt = System.currentTimeMillis()
+            )
+            // Save stub card directly so it exists in Room
+            cardRepository.saveCard(stubCard, emptyList())
+            selectMention(stubCard)
+        }
+    }
+
+    fun dismissMentionSuggestions() {
+        _uiState.update {
+            it.copy(
+                activeMentionQuery = null,
+                activeUnitIndex = null,
+                mentionSuggestions = emptyList()
+            )
+        }
+    }
+
+    fun save() {
+        val currentState = _uiState.value
+        val trimmedTitle = currentState.title.trim()
+        if (trimmedTitle.isEmpty()) {
+            _uiState.update { it.copy(errorMessage = "Title cannot be blank") }
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSaving = true, errorMessage = null) }
+            val cardId = currentState.cardId ?: UUID.randomUUID().toString()
+            val card = Card(
+                id = cardId,
+                title = trimmedTitle,
+                type = currentState.type.trim().ifBlank { null }
+            )
+            val units = currentState.units
+                .filter { it.rawText.isNotBlank() }
+                .mapIndexed { index, unit ->
+                    ContextUnit(
+                        id = unit.id,
+                        sourceCardId = cardId,
+                        sortOrder = index,
+                        rawText = unit.rawText,
+                        plainText = MentionTokenizer.toPlainText(unit.rawText)
+                    )
+                }
+
+            when (val result = saveCardUseCase(card, units)) {
+                is Result.Success -> {
+                    _uiState.update { it.copy(isSaving = false, saveSuccess = true) }
+                }
+                is Result.Error -> {
+                    _uiState.update {
+                        it.copy(isSaving = false, errorMessage = result.message ?: "Failed to save card")
+                    }
+                }
+                is Result.Loading -> Unit
+            }
+        }
+    }
+}
