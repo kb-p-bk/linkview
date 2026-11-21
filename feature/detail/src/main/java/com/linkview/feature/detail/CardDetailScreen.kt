@@ -2,6 +2,7 @@ package com.linkview.feature.detail
 
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -56,6 +58,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -115,8 +118,24 @@ fun CardDetailScreen(
         viewModel.cancelEditingUnit()
     }
 
+    val initialScroll = remember(cardId) { viewModel.getScrollPosition(cardId) }
+    val scrollState = rememberSaveable(cardId, saver = ScrollState.Saver) {
+        ScrollState(initial = initialScroll)
+    }
+
+    LaunchedEffect(scrollState.value) {
+        viewModel.saveScrollPosition(cardId, scrollState.value)
+    }
+
+    LaunchedEffect(cardId, uiState.cardWithContext) {
+        val targetPos = viewModel.getScrollPosition(cardId)
+        if (targetPos > 0 && scrollState.value != targetPos) {
+            scrollState.scrollTo(targetPos)
+        }
+    }
+
     Scaffold(
-        modifier = modifier,
+        modifier = modifier.imePadding(),
         topBar = {
             TopAppBar(
                 title = {
@@ -153,7 +172,7 @@ fun CardDetailScreen(
             )
         }
     ) { innerPadding ->
-        if (uiState.isLoading) {
+        if (uiState.isLoading && uiState.cardWithContext == null) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
             }
@@ -172,7 +191,7 @@ fun CardDetailScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scrollState)
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {

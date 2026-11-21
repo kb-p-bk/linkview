@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 
 private data class MentionQueryData(
@@ -87,17 +88,31 @@ class CardDetailViewModel @Inject constructor(
             .launchIn(viewModelScope)
     }
 
+    companion object {
+        private val scrollPositions = ConcurrentHashMap<String, Int>()
+    }
+
+    fun getScrollPosition(cardId: String): Int = scrollPositions[cardId] ?: 0
+
+    fun saveScrollPosition(cardId: String, position: Int) {
+        if (cardId.isNotBlank() && position >= 0) {
+            scrollPositions[cardId] = position
+        }
+    }
+
     fun loadCard(cardId: String) {
         if (cardId.isBlank()) return
+        val isDifferentCard = _uiState.value.cardId != cardId
+        val hasNoData = _uiState.value.cardWithContext == null
         _uiState.update {
             it.copy(
                 cardId = cardId,
-                isLoading = true,
+                isLoading = isDifferentCard && hasNoData,
                 errorMessage = null,
                 deleteSuccess = false,
                 isConfirmingDelete = false,
-                editingUnitIndex = null,
-                editableUnits = emptyList(),
+                editingUnitIndex = if (isDifferentCard) null else it.editingUnitIndex,
+                editableUnits = if (isDifferentCard) emptyList() else it.editableUnits,
                 activeMentionQuery = null,
                 mentionSuggestions = emptyList()
             )
@@ -258,7 +273,6 @@ class CardDetailViewModel @Inject constructor(
                             mentionSuggestions = emptyList()
                         )
                     }
-                    loadCard(card.id)
                 }
                 is Result.Error -> {
                     _uiState.update {
@@ -444,7 +458,6 @@ class CardDetailViewModel @Inject constructor(
                             mentionSuggestions = emptyList()
                         )
                     }
-                    loadCard(card.id)
                 }
                 is Result.Error -> {
                     _uiState.update {
