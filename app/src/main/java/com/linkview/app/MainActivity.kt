@@ -169,6 +169,12 @@ private fun TabletResponsiveLayout(
                 activeCardId = null
                 cardJumpHistory.clear()
                 cardsViewModel.deleteCollection(it)
+            },
+            onToggleHideStubs = {
+                cardsViewModel.toggleHideStubs()
+            },
+            onSortOrderSelected = {
+                cardsViewModel.onSortOrderSelected(it)
             }
         )
 

@@ -26,6 +26,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
@@ -70,6 +71,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.linkview.core.model.Card as DomainCard
 import com.linkview.core.model.CardCollection
+import com.linkview.core.model.CardSortOrder
 import com.linkview.core.model.SearchResultItem
 import com.linkview.core.model.SearchScope
 import com.linkview.core.ui.components.CompactSearchBar
@@ -93,10 +95,13 @@ fun CardsHeader(
     onSelectCollection: (String) -> Unit = {},
     onCreateCollection: (String) -> Unit = {},
     onDeleteCollection: (String) -> Unit = {},
+    onToggleHideStubs: () -> Unit = {},
+    onSortOrderSelected: (CardSortOrder) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var isTagDropdownExpanded by remember { mutableStateOf(false) }
     var isCollectionMenuExpanded by remember { mutableStateOf(false) }
+    var isSortMenuExpanded by remember { mutableStateOf(false) }
     var showCreateDialog by remember { mutableStateOf(false) }
     var collectionToDelete by remember { mutableStateOf<CardCollection?>(null) }
 
@@ -352,12 +357,72 @@ fun CardsHeader(
                 )
             }
 
-            // Row 2: Tag Search & Autocomplete + Multi-Tag Filter Chips
+            // Row 2: Sort Button + Tag Search & Autocomplete + Multi-Tag Filter Chips
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                // Sort Icon with Dropdown Menu on the left
+                Box {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    ) {
+                        IconButton(
+                            onClick = { isSortMenuExpanded = true },
+                            modifier = Modifier.size(44.dp)
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.Sort,
+                                contentDescription = "Sort Cards",
+                                modifier = Modifier.size(20.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    DropdownMenu(
+                        expanded = isSortMenuExpanded,
+                        onDismissRequest = { isSortMenuExpanded = false }
+                    ) {
+                        Text(
+                            text = "Sort Cards",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                        )
+
+                        CardSortOrder.entries.forEach { order ->
+                            val isSelected = uiState.sortOrder == order
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = order.displayName,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                },
+                                leadingIcon = {
+                                    if (isSelected) {
+                                        Icon(
+                                            Icons.Default.Check,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp),
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    } else {
+                                        Spacer(modifier = Modifier.size(18.dp))
+                                    }
+                                },
+                                onClick = {
+                                    isSortMenuExpanded = false
+                                    onSortOrderSelected(order)
+                                }
+                            )
+                        }
+                    }
+                }
+
                 // Compact Tag Search Input with Autocomplete Dropdown
                 Box {
                     CompactSearchBar(
@@ -441,6 +506,16 @@ fun CardsHeader(
                         selected = uiState.selectedTags.isEmpty(),
                         onClick = onClearTagFilters,
                         label = { Text("All") }
+                    )
+
+                    // Hide Stubs Filter Chip (next to All, selected by default)
+                    FilterChip(
+                        selected = uiState.hideStubs,
+                        onClick = onToggleHideStubs,
+                        label = { Text("Hide Stubs") },
+                        leadingIcon = if (uiState.hideStubs) {
+                            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(14.dp)) }
+                        } else null
                     )
 
                     // Selected tags with checkmark & dismiss
@@ -745,7 +820,9 @@ fun CardsScreen(
             onNavigateToBackup = onNavigateToBackup,
             onSelectCollection = { viewModel.selectCollection(it) },
             onCreateCollection = { viewModel.createCollection(it) },
-            onDeleteCollection = { viewModel.deleteCollection(it) }
+            onDeleteCollection = { viewModel.deleteCollection(it) },
+            onToggleHideStubs = { viewModel.toggleHideStubs() },
+            onSortOrderSelected = { viewModel.onSortOrderSelected(it) }
         )
 
         HorizontalDivider(

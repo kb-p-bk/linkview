@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.linkview.core.common.Result
 import com.linkview.core.model.CardCollection
+import com.linkview.core.model.CardSortOrder
 import com.linkview.core.model.SearchScope
 import com.linkview.domain.repository.CardRepository
 import com.linkview.domain.repository.CollectionRepository
@@ -191,5 +192,13 @@ class CardsViewModel @Inject constructor(
         viewModelScope.launch {
             collectionRepository.deleteCollection(id)
         }
+    }
+
+    fun toggleHideStubs() {
+        _uiState.update { it.copy(hideStubs = !it.hideStubs, displayLimit = 1000) }
+    }
+
+    fun onSortOrderSelected(sortOrder: CardSortOrder) {
+        _uiState.update { it.copy(sortOrder = sortOrder, displayLimit = 1000) }
     }
 }

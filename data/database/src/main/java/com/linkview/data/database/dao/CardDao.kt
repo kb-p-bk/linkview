@@ -7,12 +7,18 @@ import androidx.room.Query
 import androidx.room.Upsert
 import com.linkview.data.database.entity.CardEntity
 import com.linkview.data.database.entity.CardTagEntity
+import com.linkview.data.database.entity.CardWithCountEntity
 import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface CardDao {
-    @Query("SELECT * FROM cards WHERE collectionId = :collectionId ORDER BY updatedAt DESC")
-    fun observeAllCards(collectionId: String): Flow<List<CardEntity>>
+    @Query("""
+        SELECT c.*, (SELECT COUNT(*) FROM context_units cu WHERE cu.sourceCardId = c.id) AS unitCount
+        FROM cards c
+        WHERE c.collectionId = :collectionId
+        ORDER BY c.updatedAt DESC
+    """)
+    fun observeAllCards(collectionId: String): Flow<List<CardWithCountEntity>>
 
     @Query("SELECT * FROM cards WHERE id = :id LIMIT 1")
     fun observeCardById(id: String): Flow<CardEntity?>
