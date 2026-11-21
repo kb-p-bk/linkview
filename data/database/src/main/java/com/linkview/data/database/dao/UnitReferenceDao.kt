@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface UnitReferenceDao {
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertReferences(references: List<UnitReferenceEntity>)
 
     @Query("DELETE FROM unit_references WHERE unitId = :unitId")

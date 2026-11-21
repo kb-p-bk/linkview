@@ -148,3 +148,6 @@ The database file is located at `/data/data/com.linkview.app/databases/linkview.
 3. **OutlinedTextField height clipping**:
    - *Issue*: Constraining `OutlinedTextField` to 44dp causes vertical text clipping due to internal 16dp padding.
    - *Fix*: Use `CompactSearchBar` built with `BasicTextField` inside a 44dp `Surface`.
+4. **Foreign Key Cascade Deletion with `OnConflictStrategy.REPLACE`**:
+   - *Issue*: In SQLite, `INSERT OR REPLACE` deletes the conflicting row before inserting the new one. Because child tables like `unit_references(targetCardId)` declare `ON DELETE CASCADE`, updating a card with `REPLACE` deletes all incoming backlinks pointing to that card from other cards.
+   - *Fix*: Never use `@Insert(onConflict = OnConflictStrategy.REPLACE)` for parent entities. Always use Room's `@Upsert` annotation, which generates `INSERT ... ON CONFLICT DO UPDATE` and modifies the row in-place without triggering foreign key cascades.

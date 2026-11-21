@@ -191,29 +191,27 @@ class CardRepositoryImpl @Inject constructor(
                 for (unit in unitEntities) {
                     val targetRefs = MentionTokenizer.extractReferences(unit.rawText)
                     for (target in targetRefs) {
-                        var targetCard = cardDao.getCardById(target)
-                            ?: cardDao.getCardByExactTitle(effectiveCollectionId, target)
+                        val cleanTarget = target.trim()
+                        if (cleanTarget.isEmpty()) continue
+
+                        var targetCard = cardDao.getCardById(cleanTarget)?.takeIf { it.collectionId == effectiveCollectionId }
+                            ?: cardDao.getCardByExactTitle(effectiveCollectionId, cleanTarget)
                         if (targetCard == null) {
-                            val cleanTitle = target.trim()
-                            if (cleanTitle.isNotEmpty()) {
-                                val stubId = UUID.randomUUID().toString()
-                                val now = System.currentTimeMillis()
-                                val stub = CardEntity(
-                                    id = stubId,
-                                    title = cleanTitle,
-                                    type = null,
-                                    tagsCsv = "",
-                                    createdAt = now,
-                                    updatedAt = now,
-                                    collectionId = effectiveCollectionId
-                                )
-                                cardDao.upsertCard(stub)
-                                targetCard = stub
-                            }
+                            val stubId = UUID.randomUUID().toString()
+                            val now = System.currentTimeMillis()
+                            val stub = CardEntity(
+                                id = stubId,
+                                title = cleanTarget,
+                                type = null,
+                                tagsCsv = "",
+                                createdAt = now,
+                                updatedAt = now,
+                                collectionId = effectiveCollectionId
+                            )
+                            cardDao.upsertCard(stub)
+                            targetCard = stub
                         }
-                        if (targetCard != null) {
-                            references.add(UnitReferenceEntity(unitId = unit.id, targetCardId = targetCard.id))
-                        }
+                        references.add(UnitReferenceEntity(unitId = unit.id, targetCardId = targetCard.id))
                     }
                 }
                 if (references.isNotEmpty()) {

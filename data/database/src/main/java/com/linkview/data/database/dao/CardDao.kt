@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Upsert
 import com.linkview.data.database.entity.CardEntity
 import com.linkview.data.database.entity.CardTagEntity
 import kotlinx.coroutines.flow.Flow
@@ -34,7 +35,7 @@ interface CardDao {
     @Query("SELECT * FROM cards WHERE collectionId = :collectionId AND title LIKE '%' || :query || '%' COLLATE NOCASE ORDER BY title ASC LIMIT :limit")
     suspend fun autocompleteCardsAll(collectionId: String, query: String, limit: Int): List<CardEntity>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Upsert
     suspend fun upsertCard(card: CardEntity)
 
     @Query("DELETE FROM cards WHERE id = :id")
@@ -50,7 +51,7 @@ interface CardDao {
     suspend fun deleteAllCards(collectionId: String)
 
     // Tag operations
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertCardTags(tags: List<CardTagEntity>)
 
     @Query("DELETE FROM card_tags WHERE cardId = :cardId")

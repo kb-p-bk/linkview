@@ -1,9 +1,8 @@
 package com.linkview.data.database.dao
 
 import androidx.room.Dao
-import androidx.room.Insert
-import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Upsert
 import com.linkview.data.database.entity.CollectionEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -21,7 +20,7 @@ interface CollectionDao {
     @Query("SELECT * FROM collections WHERE name = :name COLLATE NOCASE LIMIT 1")
     suspend fun getCollectionByName(name: String): CollectionEntity?
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Upsert
     suspend fun upsertCollection(collection: CollectionEntity)
 
     @Query("DELETE FROM collections WHERE id = :id")

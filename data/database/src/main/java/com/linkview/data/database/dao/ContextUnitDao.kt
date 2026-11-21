@@ -1,9 +1,8 @@
 package com.linkview.data.database.dao
 
 import androidx.room.Dao
-import androidx.room.Insert
-import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Upsert
 import com.linkview.data.database.entity.ContextUnitEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -18,7 +17,7 @@ interface ContextUnitDao {
     @Query("SELECT * FROM context_units WHERE plainText LIKE '%' || :query || '%' COLLATE NOCASE")
     fun searchUnitsByText(query: String): Flow<List<ContextUnitEntity>>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Upsert
     suspend fun insertUnits(units: List<ContextUnitEntity>)
 
     @Query("DELETE FROM context_units WHERE sourceCardId = :cardId")
