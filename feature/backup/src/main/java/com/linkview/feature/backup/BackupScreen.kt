@@ -22,6 +22,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
+import androidx.compose.material.icons.filled.ContentPaste
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -68,6 +70,8 @@ fun BackupScreen(
     val context = LocalContext.current
 
     var pendingExportJson by remember { mutableStateOf<String?>(null) }
+    var showPasteDialog by remember { mutableStateOf(false) }
+    var pastedJsonText by remember { mutableStateOf("") }
 
     // SAF File Creator for Export
     val exportFileLauncher = rememberLauncherForActivityResult(
@@ -243,23 +247,82 @@ fun BackupScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.height(16.dp))
-                    OutlinedButton(
-                        onClick = {
-                            importFileLauncher.launch(arrayOf("application/json", "text/*"))
-                        },
-                        enabled = !uiState.isExporting && !uiState.isImporting
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        if (uiState.isImporting) {
-                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                            Spacer(modifier = Modifier.width(8.dp))
-                        } else {
-                            Icon(Icons.Default.FileUpload, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
+                        OutlinedButton(
+                            onClick = {
+                                importFileLauncher.launch(arrayOf("application/json", "text/*"))
+                            },
+                            enabled = !uiState.isExporting && !uiState.isImporting
+                        ) {
+                            if (uiState.isImporting) {
+                                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                                Spacer(modifier = Modifier.width(8.dp))
+                            } else {
+                                Icon(Icons.Default.FileUpload, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                            }
+                            Text("Import File")
                         }
-                        Text("Import from JSON")
+
+                        Button(
+                            onClick = { showPasteDialog = true },
+                            enabled = !uiState.isExporting && !uiState.isImporting
+                        ) {
+                            Icon(Icons.Default.ContentPaste, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Paste JSON")
+                        }
                     }
                 }
             }
+        }
+
+        // Paste JSON Dialog
+        if (showPasteDialog) {
+            AlertDialog(
+                onDismissRequest = { showPasteDialog = false },
+                title = { Text("Paste Card or Backup JSON") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = "Paste a single card, an array of cards, or backup JSON from AI. Missing IDs will be auto-generated.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        OutlinedTextField(
+                            value = pastedJsonText,
+                            onValueChange = { pastedJsonText = it },
+                            placeholder = { Text("{\n  \"title\": \"Card Title\",\n  \"tags\": [\"Tag\"],\n  \"units\": [\"Notes with @[Mentions]\"]\n}") },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(220.dp),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            if (pastedJsonText.isNotBlank()) {
+                                viewModel.onFileSelectedForImport(pastedJsonText)
+                                showPasteDialog = false
+                                pastedJsonText = ""
+                            }
+                        },
+                        enabled = pastedJsonText.isNotBlank()
+                    ) {
+                        Text("Import / Merge")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showPasteDialog = false }) {
+                        Text("Cancel")
+                    }
+                }
+            )
         }
 
         // Import Mode Decision Dialog (Merge vs Replace All)

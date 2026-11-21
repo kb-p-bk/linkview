@@ -1,5 +1,7 @@
 package com.linkview.data.repository
 
+import java.util.UUID
+
 import androidx.room.withTransaction
 import com.linkview.core.common.DispatcherProvider
 import com.linkview.core.common.mention.MentionTokenizer
@@ -159,12 +161,29 @@ class CardRepositoryImpl @Inject constructor(
                 }
                 contextUnitDao.insertUnits(unitEntities)
 
-                // Build unit_references junction links
+                // Build unit_references junction links with automatic stub card creation
                 val references = mutableListOf<UnitReferenceEntity>()
                 for (unit in unitEntities) {
                     val targetRefs = MentionTokenizer.extractReferences(unit.rawText)
                     for (target in targetRefs) {
-                        val targetCard = cardDao.getCardById(target) ?: cardDao.getCardByExactTitle(target)
+                        var targetCard = cardDao.getCardById(target) ?: cardDao.getCardByExactTitle(target)
+                        if (targetCard == null) {
+                            val cleanTitle = target.trim()
+                            if (cleanTitle.isNotEmpty()) {
+                                val stubId = UUID.randomUUID().toString()
+                                val now = System.currentTimeMillis()
+                                val stub = CardEntity(
+                                    id = stubId,
+                                    title = cleanTitle,
+                                    type = null,
+                                    tagsCsv = "",
+                                    createdAt = now,
+                                    updatedAt = now
+                                )
+                                cardDao.upsertCard(stub)
+                                targetCard = stub
+                            }
+                        }
                         if (targetCard != null) {
                             references.add(UnitReferenceEntity(unitId = unit.id, targetCardId = targetCard.id))
                         }

@@ -1,5 +1,7 @@
 package com.linkview.data.backup
 
+import java.util.UUID
+
 import androidx.room.withTransaction
 import com.linkview.core.common.DispatcherProvider
 import com.linkview.core.common.Result
@@ -94,37 +96,62 @@ class BackupRepositoryImpl @Inject constructor(
                     cardDao.deleteAllCards()
                 }
 
-                val importedCardIds = envelope.cards.map { it.id }.toSet()
-
+                val now = System.currentTimeMillis()
                 for (card in envelope.cards) {
+                    val cardTitle = card.title.trim()
+                    if (cardTitle.isEmpty()) continue
+
+                    val existingCard = cardDao.getCardByExactTitle(cardTitle)
+                    val cardId = when {
+                        card.id.isNotBlank() -> card.id
+                        existingCard != null && mode == ImportMode.MERGE -> existingCard.id
+                        else -> UUID.randomUUID().toString()
+                    }
+
+                    val createdAt = if (card.createdAt > 0L) card.createdAt else (existingCard?.createdAt ?: now)
                     val domainCard = Card(
-                        id = card.id,
-                        title = card.title.trim(),
+                        id = cardId,
+                        title = cardTitle,
                         tags = card.allTags,
                         type = card.type?.trim()?.ifBlank { null },
-                        createdAt = card.createdAt,
-                        updatedAt = card.updatedAt
+                        createdAt = createdAt,
+                        updatedAt = now
                     )
-                    val cardEntity = CardEntity.fromDomain(domainCard)
-                    cardDao.upsertCard(cardEntity)
+                    cardDao.upsertCard(CardEntity.fromDomain(domainCard))
                     cardsImported++
 
                     // Sync tags
-                    cardDao.deleteCardTagsForCard(card.id)
-                    val tagEntities = domainCard.allTags.map { CardTagEntity(cardId = card.id, tag = it) }
+                    cardDao.deleteCardTagsForCard(cardId)
+                    val tagEntities = domainCard.allTags.map { CardTagEntity(cardId = cardId, tag = it) }
                     if (tagEntities.isNotEmpty()) {
                         cardDao.insertCardTags(tagEntities)
                     }
 
                     if (mode == ImportMode.MERGE) {
-                        contextUnitDao.deleteUnitsForCard(card.id)
+                        contextUnitDao.deleteUnitsForCard(cardId)
                     }
 
-                    if (card.contextUnits.isNotEmpty()) {
-                        val unitEntities = card.contextUnits.map { unit ->
+                    // Support both structured contextUnits and AI-friendly units: List<String>
+                    val rawUnits = when {
+                        card.contextUnits.isNotEmpty() -> card.contextUnits.mapIndexed { idx, u ->
+                            val uId = if (u.id.isNotBlank()) u.id else UUID.randomUUID().toString()
+                            u.copy(id = uId, sortOrder = idx)
+                        }
+                        card.units.isNotEmpty() -> card.units.mapIndexed { idx, text ->
+                            com.linkview.core.model.BackupUnit(
+                                id = UUID.randomUUID().toString(),
+                                sortOrder = idx,
+                                rawText = text
+                            )
+                        }
+                        else -> emptyList()
+                    }
+
+                    if (rawUnits.isNotEmpty()) {
+                        val unitEntities = rawUnits.map { unit ->
                             ContextUnitEntity(
                                 id = unit.id,
-                                sourceCardId = card.id,
+                                sourceCardId = cardId,
                                 sortOrder = unit.sortOrder,
                                 rawText = unit.rawText,
                                 plainText = MentionTokenizer.toPlainText(unit.rawText)
@@ -134,14 +161,36 @@ class BackupRepositoryImpl @Inject constructor(
                         unitsImported += unitEntities.size
 
                         val references = mutableListOf<UnitReferenceEntity>()
-                        for (unit in card.contextUnits) {
-                            for (refTargetId in unit.references) {
-                                references.add(
-                                    UnitReferenceEntity(
-                                        unitId = unit.id,
-                                        targetCardId = refTargetId
+                        for (unit in rawUnits) {
+                            val extracted = MentionTokenizer.extractReferences(unit.rawText)
+                            val allRefs = (extracted + unit.references).distinct()
+                            for (targetRef in allRefs) {
+                                var targetCard = cardDao.getCardById(targetRef) ?: cardDao.getCardByExactTitle(targetRef)
+                                if (targetCard == null) {
+                                    val cleanTarget = targetRef.trim()
+                                    if (cleanTarget.isNotEmpty()) {
+                                        val stubId = UUID.randomUUID().toString()
+                                        val stub = CardEntity(
+                                            id = stubId,
+                                            title = cleanTarget,
+                                            type = null,
+                                            tagsCsv = "",
+                                            createdAt = now,
+                                            updatedAt = now
+                                        )
+                                        cardDao.upsertCard(stub)
+                                        targetCard = stub
+                                        cardsImported++
+                                    }
+                                }
+                                if (targetCard != null) {
+                                    references.add(
+                                        UnitReferenceEntity(
+                                            unitId = unit.id,
+                                            targetCardId = targetCard.id
+                                        )
                                     )
-                                )
+                                }
                             }
                         }
                         if (references.isNotEmpty()) {

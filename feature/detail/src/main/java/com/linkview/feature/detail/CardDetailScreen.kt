@@ -42,6 +42,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import android.widget.Toast
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.linkview.core.ui.components.RichMentionText
@@ -60,6 +73,7 @@ fun CardDetailScreen(
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    var showJsonDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(cardId) {
         viewModel.loadCard(cardId)
@@ -91,6 +105,9 @@ fun CardDetailScreen(
                 },
                 actions = {
                     if (uiState.cardWithContext != null) {
+                        IconButton(onClick = { showJsonDialog = true }) {
+                            Icon(Icons.Default.Code, contentDescription = "View & Copy Card JSON")
+                        }
                         IconButton(onClick = { onEditCard(cardId) }) {
                             Icon(Icons.Default.Edit, contentDescription = "Edit Card")
                         }
@@ -271,6 +288,66 @@ fun CardDetailScreen(
             Spacer(modifier = Modifier.height(32.dp))
         }
 
+        // Card JSON view & copy dialog
+        if (showJsonDialog && cardWithContext != null) {
+            val jsonString = remember(cardWithContext) { formatCardToJson(cardWithContext) }
+            val context = LocalContext.current
+            val clipboardManager = LocalClipboardManager.current
+
+            AlertDialog(
+                onDismissRequest = { showJsonDialog = false },
+                title = {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Card JSON", style = MaterialTheme.typography.titleLarge)
+                        FilledTonalButton(
+                            onClick = {
+                                clipboardManager.setText(AnnotatedString(jsonString))
+                                Toast.makeText(context, "JSON copied to clipboard", Toast.LENGTH_SHORT).show()
+                            },
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Copy")
+                        }
+                    }
+                },
+                text = {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 350.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .verticalScroll(rememberScrollState())
+                                .padding(12.dp)
+                        ) {
+                            SelectionContainer {
+                                Text(
+                                    text = jsonString,
+                                    fontFamily = FontFamily.Monospace,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showJsonDialog = false }) {
+                        Text("Close")
+                    }
+                }
+            )
+        }
+
         // Delete confirmation dialog
         if (uiState.isConfirmingDelete) {
             AlertDialog(
@@ -301,5 +378,31 @@ fun CardDetailScreen(
                 }
             )
         }
+    }
+}
+
+private fun formatCardToJson(cardWithContext: com.linkview.core.model.CardWithContext): String {
+    val card = cardWithContext.card
+    val cleanTags = card.allTags
+    val unitTexts = cardWithContext.authoredUnits.map { it.rawText }
+    val tagsJson = cleanTags.joinToString(",\n    ") { "\"$it\"" }
+    val unitsJson = unitTexts.joinToString(",\n    ") {
+        val escaped = it.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n")
+        "\"$escaped\""
+    }
+    return buildString {
+        append("{\n")
+        append("  \"title\": \"${card.title.replace("\"", "\\\"")}\"")
+        if (cleanTags.isNotEmpty()) {
+            append(",\n  \"tags\": [\n    $tagsJson\n  ]")
+        } else {
+            append(",\n  \"tags\": []")
+        }
+        if (unitTexts.isNotEmpty()) {
+            append(",\n  \"units\": [\n    $unitsJson\n  ]")
+        } else {
+            append(",\n  \"units\": []")
+        }
+        append("\n}")
     }
 }

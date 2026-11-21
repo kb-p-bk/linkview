@@ -5,19 +5,20 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class BackupEnvelope(
     val schemaVersion: Int = 1,
-    val exportedAt: String,
-    val cards: List<BackupCard>
+    val exportedAt: String = "",
+    val cards: List<BackupCard> = emptyList()
 )
 
 @Serializable
 data class BackupCard(
-    val id: String,
+    val id: String = "",
     val title: String,
     val tags: List<String> = emptyList(),
     val type: String? = null,
-    val createdAt: Long,
-    val updatedAt: Long,
-    val contextUnits: List<BackupUnit> = emptyList()
+    val createdAt: Long = 0L,
+    val updatedAt: Long = 0L,
+    val contextUnits: List<BackupUnit> = emptyList(),
+    val units: List<String> = emptyList()
 ) {
     val allTags: List<String>
         get() = buildList {
@@ -30,8 +31,8 @@ data class BackupCard(
 
 @Serializable
 data class BackupUnit(
-    val id: String,
-    val sortOrder: Int,
+    val id: String = "",
+    val sortOrder: Int = 0,
     val rawText: String,
     val references: List<String> = emptyList()
 )
