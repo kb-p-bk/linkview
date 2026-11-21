@@ -22,6 +22,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+private val DEFAULT_CARD_TYPES = listOf("Person", "Event", "Place", "Institution", "Concept")
+
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class CardsViewModel @Inject constructor(
@@ -45,10 +47,11 @@ class CardsViewModel @Inject constructor(
             }
         }
 
-        // Observe distinct tags
+        // Observe distinct tags (most used recently first)
         viewModelScope.launch {
             cardRepository.observeAllTags().collect { tags ->
-                _uiState.update { it.copy(allAvailableTags = tags) }
+                val sortedTags = (tags + DEFAULT_CARD_TYPES).distinct()
+                _uiState.update { it.copy(allAvailableTags = sortedTags) }
             }
         }
 

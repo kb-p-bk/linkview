@@ -57,6 +57,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.PopupProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.linkview.core.model.Card
@@ -176,8 +177,8 @@ fun CardEditorScreen(
             OutlinedTextField(
                 value = uiState.title,
                 onValueChange = { viewModel.onTitleChanged(it) },
-                label = { Text("Card Title") },
-                placeholder = { Text("Title") },
+                placeholder = { Text("Card title") },
+                shape = RoundedCornerShape(24.dp),
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 isError = uiState.errorMessage != null && uiState.title.isBlank()
@@ -243,6 +244,7 @@ fun CardEditorScreen(
                                 isTagDropdownOpen = it.isNotBlank()
                             },
                             placeholder = { Text("Search & add tag...", maxLines = 1) },
+                            shape = RoundedCornerShape(24.dp),
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -254,23 +256,24 @@ fun CardEditorScreen(
 
                         DropdownMenu(
                             expanded = isTagDropdownOpen && (matchingExisting.isNotEmpty() || isNewTag),
-                            onDismissRequest = { isTagDropdownOpen = false }
+                            onDismissRequest = { isTagDropdownOpen = false },
+                            properties = PopupProperties(focusable = false)
                         ) {
+                            matchingExisting.take(8).forEach { tag ->
+                                DropdownMenuItem(
+                                    text = { Text(tag) },
+                                    onClick = {
+                                        viewModel.addTag(tag)
+                                        isTagDropdownOpen = false
+                                    }
+                                )
+                            }
                             if (isNewTag) {
                                 DropdownMenuItem(
                                     text = { Text("+ Add \"$inputQuery\"") },
                                     leadingIcon = { Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp)) },
                                     onClick = {
                                         viewModel.addTag(inputQuery)
-                                        isTagDropdownOpen = false
-                                    }
-                                )
-                            }
-                            matchingExisting.take(8).forEach { tag ->
-                                DropdownMenuItem(
-                                    text = { Text(tag) },
-                                    onClick = {
-                                        viewModel.addTag(tag)
                                         isTagDropdownOpen = false
                                     }
                                 )
@@ -283,6 +286,7 @@ fun CardEditorScreen(
                             viewModel.addTag(uiState.tagInputText)
                             isTagDropdownOpen = false
                         },
+                        shape = RoundedCornerShape(24.dp),
                         enabled = uiState.tagInputText.isNotBlank()
                     ) {
                         Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))

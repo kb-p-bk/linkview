@@ -20,6 +20,8 @@ import kotlinx.coroutines.launch
 import java.util.UUID
 import javax.inject.Inject
 
+private val DEFAULT_CARD_TYPES = listOf("Person", "Event", "Place", "Institution", "Concept")
+
 @HiltViewModel
 class CardEditorViewModel @Inject constructor(
     private val saveCardUseCase: SaveCardUseCase,
@@ -35,7 +37,8 @@ class CardEditorViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             cardRepository.observeAllTags().collect { tags ->
-                _uiState.update { it.copy(allExistingTags = tags) }
+                val sortedTags = (tags + DEFAULT_CARD_TYPES).distinct()
+                _uiState.update { it.copy(allExistingTags = sortedTags) }
             }
         }
     }

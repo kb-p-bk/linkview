@@ -50,6 +50,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.PopupProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.linkview.core.model.Card as DomainCard
@@ -155,7 +156,7 @@ fun CardsHeader(
                                 }
                             }
                         },
-                        shape = RoundedCornerShape(20.dp),
+                        shape = RoundedCornerShape(24.dp),
                         singleLine = true,
                         modifier = Modifier.width(175.dp)
                     )
@@ -167,18 +168,9 @@ fun CardsHeader(
 
                     DropdownMenu(
                         expanded = isTagDropdownExpanded && (matchingTags.isNotEmpty() || showCreateOption),
-                        onDismissRequest = { isTagDropdownExpanded = false }
+                        onDismissRequest = { isTagDropdownExpanded = false },
+                        properties = PopupProperties(focusable = false)
                     ) {
-                        if (showCreateOption) {
-                            DropdownMenuItem(
-                                text = { Text("+ Create \"$tagQuery\"") },
-                                leadingIcon = { Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp)) },
-                                onClick = {
-                                    onAddAndSelectTag(tagQuery)
-                                    isTagDropdownExpanded = false
-                                }
-                            )
-                        }
                         matchingTags.take(8).forEach { tag ->
                             val isSelected = uiState.selectedTags.any { it.equals(tag, ignoreCase = true) }
                             DropdownMenuItem(
@@ -189,6 +181,16 @@ fun CardsHeader(
                                 onClick = {
                                     onToggleTagFilter(tag)
                                     onTagSearchQueryChanged("")
+                                    isTagDropdownExpanded = false
+                                }
+                            )
+                        }
+                        if (showCreateOption) {
+                            DropdownMenuItem(
+                                text = { Text("+ Create \"$tagQuery\"") },
+                                leadingIcon = { Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                                onClick = {
+                                    onAddAndSelectTag(tagQuery)
                                     isTagDropdownExpanded = false
                                 }
                             )

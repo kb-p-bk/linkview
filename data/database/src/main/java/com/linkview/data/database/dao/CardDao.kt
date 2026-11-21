@@ -53,10 +53,32 @@ interface CardDao {
     @Query("DELETE FROM card_tags WHERE cardId = :cardId")
     suspend fun deleteCardTagsForCard(cardId: String)
 
-    @Query("SELECT DISTINCT tag FROM card_tags ORDER BY tag ASC")
+    @Query("""
+        SELECT ct.tag 
+        FROM card_tags ct
+        JOIN cards c ON ct.cardId = c.id
+        GROUP BY ct.tag
+        ORDER BY MAX(c.updatedAt) DESC, COUNT(ct.cardId) DESC, ct.tag COLLATE NOCASE ASC
+    """)
     fun observeAllTags(): Flow<List<String>>
 
-    @Query("SELECT DISTINCT tag FROM card_tags WHERE tag LIKE '%' || :query || '%' ORDER BY tag ASC LIMIT 20")
+    @Query("""
+        SELECT ct.tag 
+        FROM card_tags ct
+        JOIN cards c ON ct.cardId = c.id
+        WHERE ct.tag LIKE '%' || :query || '%' COLLATE NOCASE
+        GROUP BY ct.tag
+        ORDER BY 
+            CASE 
+                WHEN LOWER(ct.tag) = LOWER(:query) THEN 0
+                WHEN LOWER(ct.tag) LIKE LOWER(:query) || '%' THEN 1
+                ELSE 2 
+            END,
+            MAX(c.updatedAt) DESC, 
+            COUNT(ct.cardId) DESC, 
+            ct.tag COLLATE NOCASE ASC
+        LIMIT 20
+    """)
     fun searchTags(query: String): Flow<List<String>>
 
     @Query("SELECT tag FROM card_tags WHERE cardId = :cardId")
