@@ -109,4 +109,15 @@ interface CardDao {
         ORDER BY updatedAt DESC
     """)
     fun observeCardsByTags(tags: List<String>, tagCount: Int): Flow<List<CardEntity>>
+
+    @Query("SELECT title FROM cards ORDER BY title COLLATE NOCASE ASC")
+    suspend fun getAllTitles(): List<String>
+
+    @Query("""
+        SELECT DISTINCT c.title FROM cards c 
+        JOIN card_tags ct ON c.id = ct.cardId 
+        WHERE ct.tag IN (:tags) 
+        ORDER BY c.title COLLATE NOCASE ASC
+    """)
+    suspend fun getTitlesByTags(tags: List<String>): List<String>
 }

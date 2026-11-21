@@ -6,6 +6,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,6 +22,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.FileDownload
@@ -32,6 +35,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -63,7 +67,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun BackupScreen(
     onNavigateBack: () -> Unit,
@@ -225,7 +229,7 @@ fun BackupScreen(
                     }
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "Clean, human-readable JSON array of cards with titles, tags, and context units. Free of database UUIDs, timestamps, and schema wrappers. Perfect for reading, sharing, external edits, or AI tools.",
+                        text = "Clean, human-readable JSON array of cards with titles, tags, and context units. Free of database UUIDs, timestamps, and schema wrappers. Perfect for reading, sharing, external edits, and scripting.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -313,6 +317,105 @@ fun BackupScreen(
                 }
             }
 
+            // Reference Titles Index Card
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+            ) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Reference Titles Index",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.secondaryContainer
+                        ) {
+                            Text(
+                                text = "Reference Index",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Export a lightweight list of existing card titles for all or selected tags. Useful as a canonical index of names for external cross-referencing and writing.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    if (uiState.availableTags.isNotEmpty()) {
+                        Text(
+                            text = if (uiState.selectedFilterTags.isEmpty()) "Filter by tag (All cards selected):" else "Filtered tags (${uiState.selectedFilterTags.size} active):",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            FilterChip(
+                                selected = uiState.selectedFilterTags.isEmpty(),
+                                onClick = { viewModel.clearFilterTags() },
+                                label = { Text("All") }
+                            )
+                            uiState.availableTags.forEach { tag ->
+                                FilterChip(
+                                    selected = uiState.selectedFilterTags.contains(tag),
+                                    onClick = { viewModel.toggleFilterTag(tag) },
+                                    label = { Text(tag) }
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(14.dp))
+                    }
+
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Button(
+                            onClick = {
+                                viewModel.exportTitles(asJson = false) { text, count ->
+                                    clipboardManager.setText(AnnotatedString(text))
+                                    viewModel.onExportSavedSuccess("Copied $count card titles (Markdown list) to clipboard!")
+                                }
+                            },
+                            enabled = !uiState.isExporting && !uiState.isImporting
+                        ) {
+                            Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Copy List")
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                viewModel.exportTitles(asJson = true) { text, count ->
+                                    clipboardManager.setText(AnnotatedString(text))
+                                    viewModel.onExportSavedSuccess("Copied $count card titles (JSON array) to clipboard!")
+                                }
+                            },
+                            enabled = !uiState.isExporting && !uiState.isImporting
+                        ) {
+                            Icon(Icons.Default.Code, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Copy JSON")
+                        }
+                    }
+                }
+            }
+
             // Import Card
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -372,7 +475,7 @@ fun BackupScreen(
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(
-                            text = "Paste a single card, an array of cards, or backup JSON from AI. Missing IDs will be auto-generated.",
+                            text = "Paste a single card, an array of cards, or backup JSON. Missing IDs and backlinks will be auto-generated.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

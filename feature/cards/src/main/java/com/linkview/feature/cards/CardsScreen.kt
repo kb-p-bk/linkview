@@ -1,13 +1,17 @@
 package com.linkview.feature.cards
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -15,12 +19,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
@@ -39,7 +43,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -49,6 +52,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.PopupProperties
@@ -95,20 +99,28 @@ fun CardsHeader(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                OutlinedTextField(
+                CompactSearchBar(
                     value = uiState.searchQuery,
                     onValueChange = onSearchQueryChanged,
-                    placeholder = { Text("Search cards...", maxLines = 1) },
-                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                    placeholderText = "Search cards...",
+                    leadingIcon = {
+                        Icon(
+                            Icons.Default.Search,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
                     trailingIcon = {
                         if (uiState.searchQuery.isNotEmpty()) {
-                            IconButton(onClick = { onSearchQueryChanged("") }) {
+                            IconButton(
+                                onClick = { onSearchQueryChanged("") },
+                                modifier = Modifier.size(24.dp)
+                            ) {
                                 Icon(Icons.Default.Clear, contentDescription = "Clear search", modifier = Modifier.size(16.dp))
                             }
                         }
                     },
-                    shape = RoundedCornerShape(24.dp),
-                    singleLine = true,
                     modifier = Modifier.weight(1f)
                 )
 
@@ -149,26 +161,34 @@ fun CardsHeader(
             ) {
                 // Compact Tag Search Input with Autocomplete Dropdown
                 Box {
-                    OutlinedTextField(
+                    CompactSearchBar(
                         value = uiState.tagSearchQuery,
                         onValueChange = {
                             onTagSearchQueryChanged(it)
                             isTagDropdownExpanded = it.isNotBlank()
                         },
-                        placeholder = { Text("Filter tag...", maxLines = 1, style = MaterialTheme.typography.bodySmall) },
-                        leadingIcon = { Icon(Icons.Default.Tag, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                        placeholderText = "Filter tag...",
+                        leadingIcon = {
+                            Icon(
+                                Icons.Default.Tag,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        },
                         trailingIcon = {
                             if (uiState.tagSearchQuery.isNotEmpty()) {
-                                IconButton(onClick = {
-                                    onTagSearchQueryChanged("")
-                                    isTagDropdownExpanded = false
-                                }) {
+                                IconButton(
+                                    onClick = {
+                                        onTagSearchQueryChanged("")
+                                        isTagDropdownExpanded = false
+                                    },
+                                    modifier = Modifier.size(24.dp)
+                                ) {
                                     Icon(Icons.Default.Clear, contentDescription = "Clear tag query", modifier = Modifier.size(14.dp))
                                 }
                             }
                         },
-                        shape = RoundedCornerShape(24.dp),
-                        singleLine = true,
                         modifier = Modifier.widthIn(min = 120.dp, max = 160.dp)
                     )
 
@@ -281,7 +301,13 @@ fun CardsGridContent(
     onCardClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Box(modifier = modifier.fillMaxSize()) {
+    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+        val minCardSize = 220.dp
+        val horizontalSpacing = 10.dp
+        val padding = 32.dp // 16.dp each side
+        val availableWidth = maxWidth - padding
+        val columns = maxOf(1, ((availableWidth + horizontalSpacing) / (minCardSize + horizontalSpacing)).toInt())
+
         if (uiState.isLoading) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
@@ -297,20 +323,39 @@ fun CardsGridContent(
                     )
                 }
             } else {
-                LazyVerticalGrid(
-                    columns = GridCells.Adaptive(minSize = 220.dp),
+                val rows = searchResults.chunked(columns)
+                LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    items(searchResults, key = { it.card.id }) { item ->
-                        SearchResultGridItem(
-                            item = item,
-                            searchQuery = uiState.searchQuery,
-                            isSelected = item.card.id == (selectedCardId ?: uiState.selectedCardId),
-                            onClick = { onCardClick(item.card.id) }
-                        )
+                    items(rows, key = { row -> row.first().card.id }) { rowItems ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(IntrinsicSize.Max),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            for (item in rowItems) {
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxHeight()
+                                ) {
+                                    SearchResultGridItem(
+                                        item = item,
+                                        searchQuery = uiState.searchQuery,
+                                        isSelected = item.card.id == (selectedCardId ?: uiState.selectedCardId),
+                                        onClick = { onCardClick(item.card.id) },
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                }
+                            }
+                            val emptySpaces = columns - rowItems.size
+                            for (i in 0 until emptySpaces) {
+                                Spacer(modifier = Modifier.weight(1f))
+                            }
+                        }
                     }
                 }
             }
@@ -333,19 +378,38 @@ fun CardsGridContent(
                     }
                 }
             } else {
-                LazyVerticalGrid(
-                    columns = GridCells.Adaptive(minSize = 220.dp),
+                val rows = cards.chunked(columns)
+                LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    items(cards, key = { it.id }) { card ->
-                        CardGridItem(
-                            card = card,
-                            isSelected = card.id == (selectedCardId ?: uiState.selectedCardId),
-                            onClick = { onCardClick(card.id) }
-                        )
+                    items(rows, key = { row -> row.first().id }) { rowCards ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(IntrinsicSize.Max),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            for (card in rowCards) {
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxHeight()
+                                ) {
+                                    CardGridItem(
+                                        card = card,
+                                        isSelected = card.id == (selectedCardId ?: uiState.selectedCardId),
+                                        onClick = { onCardClick(card.id) },
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                }
+                            }
+                            val emptySpaces = columns - rowCards.size
+                            for (i in 0 until emptySpaces) {
+                                Spacer(modifier = Modifier.weight(1f))
+                            }
+                        }
                     }
                 }
             }
@@ -398,10 +462,11 @@ fun CardsScreen(
 private fun CardGridItem(
     card: DomainCard,
     isSelected: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp),
@@ -415,8 +480,9 @@ private fun CardGridItem(
     ) {
         Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp)
+                .fillMaxSize()
+                .padding(14.dp),
+            verticalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
                 text = card.title,
@@ -458,10 +524,11 @@ private fun SearchResultGridItem(
     item: SearchResultItem,
     searchQuery: String,
     isSelected: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp),
@@ -475,17 +542,32 @@ private fun SearchResultGridItem(
     ) {
         Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp)
+                .fillMaxSize()
+                .padding(14.dp),
+            verticalArrangement = Arrangement.SpaceBetween
         ) {
-            HighlightedText(
-                text = item.card.title,
-                highlight = searchQuery,
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold
-                ),
-                modifier = Modifier.fillMaxWidth()
-            )
+            Column {
+                HighlightedText(
+                    text = item.card.title,
+                    highlight = searchQuery,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                if (item.matchingSnippets.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    item.matchingSnippets.take(2).forEach { snippet ->
+                        HighlightedText(
+                            text = "“…$snippet…”",
+                            highlight = searchQuery,
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 2
+                        )
+                    }
+                }
+            }
 
             val tags = item.card.allTags
             if (tags.isNotEmpty()) {
@@ -511,17 +593,61 @@ private fun SearchResultGridItem(
                     }
                 }
             }
+        }
+    }
+}
 
-            if (item.matchingSnippets.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(6.dp))
-                item.matchingSnippets.take(2).forEach { snippet ->
-                    HighlightedText(
-                        text = "“…$snippet…”",
-                        highlight = searchQuery,
-                        style = MaterialTheme.typography.bodySmall,
-                        maxLines = 2
+@Composable
+private fun CompactSearchBar(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholderText: String,
+    leadingIcon: @Composable (() -> Unit)? = null,
+    trailingIcon: @Composable (() -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier.height(44.dp),
+        shape = RoundedCornerShape(22.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (leadingIcon != null) {
+                leadingIcon()
+                Spacer(modifier = Modifier.width(8.dp))
+            }
+            Box(
+                modifier = Modifier.weight(1f),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                if (value.isEmpty()) {
+                    Text(
+                        text = placeholderText,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1
                     )
                 }
+                BasicTextField(
+                    value = value,
+                    onValueChange = onValueChange,
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(
+                        color = MaterialTheme.colorScheme.onSurface
+                    ),
+                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+            if (trailingIcon != null) {
+                Spacer(modifier = Modifier.width(4.dp))
+                trailingIcon()
             }
         }
     }

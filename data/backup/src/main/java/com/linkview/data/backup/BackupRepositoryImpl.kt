@@ -96,6 +96,16 @@ class BackupRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun exportReferenceTitles(tags: List<String>): Result<List<String>> = withContext(dispatchers.io) {
+        runCatchingResult {
+            if (tags.isEmpty()) {
+                cardDao.getAllTitles()
+            } else {
+                cardDao.getTitlesByTags(tags)
+            }
+        }
+    }
+
     override suspend fun importJson(jsonContent: String, mode: ImportMode): Result<ImportSummary> = withContext(dispatchers.io) {
         runCatchingResult {
             val envelope = serializer.decodeFromString(jsonContent)
@@ -163,7 +173,7 @@ class BackupRepositoryImpl @Inject constructor(
                     if (cardTitle.isEmpty()) continue
                     val cardId = titleToIdMap[cardTitle.lowercase()] ?: card.id.ifBlank { null } ?: continue
 
-                    // Support both structured contextUnits and AI-friendly units: List<String>
+                    // Support both structured contextUnits and shorthand units: List<String>
                     val rawUnits = when {
                         card.contextUnits.isNotEmpty() -> card.contextUnits.mapIndexed { idx, u ->
                             val uId = if (u.id.isNotBlank()) u.id else UUID.randomUUID().toString()

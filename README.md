@@ -84,6 +84,11 @@ LinkView clearly distinguishes between two export formats on the Backup & Portab
    - Ideal for lossless device-to-device migration and disaster recovery.
    - Saved as `linkview-full-backup-YYYY-MM-DD.json`.
 
+3. Reference Titles Index:
+   - Emits a compact index of existing card titles, either for all cards or filtered by selected tags.
+   - One-tap copying as a Markdown list (`- Title 1\n- Title 2`) or JSON array (`["Title 1", "Title 2"]`).
+   - Ideal for feeding into prompts so external tools know existing reference titles and link to them accurately.
+
 ### JSON Import and In-Place Editing
 
 - View, Copy, and Edit Card JSON: Tap the code icon (`</>`) on any card's detail screen to inspect, copy, or directly edit its JSON representation. Saving changes in the dialog updates the card, its tags, and its context units in real time.

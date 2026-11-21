@@ -8,4 +8,6 @@ class ExportCardsUseCase(
 ) {
     suspend operator fun invoke(): Result<String> = backupRepository.exportJson()
     suspend fun exportHumanReadable(): Result<String> = backupRepository.exportHumanReadableJson()
+    suspend fun exportReferenceTitles(tags: List<String> = emptyList()): Result<List<String>> =
+        backupRepository.exportReferenceTitles(tags)
 }

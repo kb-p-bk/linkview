@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.linkview.core.common.Result
 import com.linkview.core.model.ImportMode
+import com.linkview.domain.repository.CardRepository
 import com.linkview.domain.usecase.ExportCardsUseCase
 import com.linkview.domain.usecase.ImportCardsUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -17,11 +18,63 @@ import javax.inject.Inject
 @HiltViewModel
 class BackupViewModel @Inject constructor(
     private val exportCardsUseCase: ExportCardsUseCase,
-    private val importCardsUseCase: ImportCardsUseCase
+    private val importCardsUseCase: ImportCardsUseCase,
+    private val cardRepository: CardRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(BackupUiState())
     val uiState: StateFlow<BackupUiState> = _uiState.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            cardRepository.observeAllTags().collect { tags ->
+                _uiState.update { it.copy(availableTags = tags) }
+            }
+        }
+    }
+
+    fun toggleFilterTag(tag: String) {
+        _uiState.update { current ->
+            val updated = if (current.selectedFilterTags.contains(tag)) {
+                current.selectedFilterTags - tag
+            } else {
+                current.selectedFilterTags + tag
+            }
+            current.copy(selectedFilterTags = updated)
+        }
+    }
+
+    fun clearFilterTags() {
+        _uiState.update { it.copy(selectedFilterTags = emptySet()) }
+    }
+
+    fun exportTitles(asJson: Boolean, onDataReady: (formattedText: String, count: Int) -> Unit) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isExporting = true, errorMessage = null) }
+            val tags = _uiState.value.selectedFilterTags.toList()
+            when (val result = exportCardsUseCase.exportReferenceTitles(tags)) {
+                is Result.Success -> {
+                    _uiState.update { it.copy(isExporting = false) }
+                    val titles = result.data
+                    val formatted = if (asJson) {
+                        "[\n" + titles.joinToString(",\n") { "  \"${it.replace("\"", "\\\"")}\"" } + "\n]"
+                    } else {
+                        titles.joinToString("\n") { "- $it" }
+                    }
+                    onDataReady(formatted, titles.size)
+                }
+                is Result.Error -> {
+                    _uiState.update {
+                        it.copy(
+                            isExporting = false,
+                            errorMessage = result.message ?: "Failed to export card titles."
+                        )
+                    }
+                }
+                is Result.Loading -> Unit
+            }
+        }
+    }
 
     fun exportFullBackup(onDataReady: (jsonContent: String) -> Unit) {
         viewModelScope.launch {

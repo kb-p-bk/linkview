@@ -7,5 +7,6 @@ import com.linkview.core.model.ImportSummary
 interface BackupRepository {
     suspend fun exportJson(): Result<String>
     suspend fun exportHumanReadableJson(): Result<String>
+    suspend fun exportReferenceTitles(tags: List<String> = emptyList()): Result<List<String>>
     suspend fun importJson(jsonContent: String, mode: ImportMode): Result<ImportSummary>
 }

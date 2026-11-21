@@ -1,17 +1,18 @@
 package com.linkview.core.ui.components
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import com.linkview.core.common.mention.MentionTokenizer
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun RichMentionText(
     rawText: String,
@@ -30,38 +31,53 @@ fun RichMentionText(
         return
     }
 
-    FlowRow(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        verticalArrangement = Arrangement.Center
-    ) {
+    val linkColor = MaterialTheme.colorScheme.primary
+    val linkBg = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+
+    val annotatedString = buildAnnotatedString {
         var currentIndex = 0
         for (token in tokens) {
             val safeStart = token.startIndex.coerceIn(0, rawText.length)
             if (safeStart > currentIndex) {
                 val plainSegment = rawText.substring(currentIndex, safeStart)
                 if (plainSegment.isNotEmpty()) {
-                    Text(
-                        text = parseMarkdownToAnnotatedString(plainSegment, codeBg),
-                        style = style
-                    )
+                    append(parseMarkdownToAnnotatedString(plainSegment, codeBg))
                 }
             }
-            MentionChip(
-                label = token.label,
-                onClick = { onCardClick(token.targetCardId) }
+
+            val linkAnnotation = LinkAnnotation.Clickable(
+                tag = "CARD_LINK_${token.targetCardId}",
+                styles = TextLinkStyles(
+                    style = SpanStyle(
+                        color = linkColor,
+                        background = linkBg,
+                        fontWeight = FontWeight.SemiBold
+                    ),
+                    focusedStyle = SpanStyle(
+                        textDecoration = TextDecoration.Underline
+                    )
+                ),
+                linkInteractionListener = { onCardClick(token.targetCardId) }
             )
+
+            pushLink(linkAnnotation)
+            append("@${token.label}")
+            pop()
+
             currentIndex = token.endIndex.coerceIn(0, rawText.length)
         }
 
         if (currentIndex < rawText.length) {
             val trailing = rawText.substring(currentIndex)
             if (trailing.isNotEmpty()) {
-                Text(
-                    text = parseMarkdownToAnnotatedString(trailing, codeBg),
-                    style = style
-                )
+                append(parseMarkdownToAnnotatedString(trailing, codeBg))
             }
         }
     }
+
+    Text(
+        text = annotatedString,
+        style = style,
+        modifier = modifier
+    )
 }
