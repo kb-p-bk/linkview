@@ -13,11 +13,20 @@ data class BackupEnvelope(
 data class BackupCard(
     val id: String,
     val title: String,
+    val tags: List<String> = emptyList(),
     val type: String? = null,
     val createdAt: Long,
     val updatedAt: Long,
     val contextUnits: List<BackupUnit> = emptyList()
-)
+) {
+    val allTags: List<String>
+        get() = buildList {
+            addAll(tags)
+            if (!type.isNullOrBlank() && !contains(type)) {
+                add(type)
+            }
+        }
+}
 
 @Serializable
 data class BackupUnit(

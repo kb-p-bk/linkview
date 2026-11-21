@@ -8,6 +8,7 @@ import com.linkview.core.common.runCatchingResult
 import com.linkview.core.model.BackupCard
 import com.linkview.core.model.BackupEnvelope
 import com.linkview.core.model.BackupUnit
+import com.linkview.core.model.Card
 import com.linkview.core.model.ImportMode
 import com.linkview.core.model.ImportSummary
 import com.linkview.data.database.LinkViewDatabase
@@ -15,6 +16,7 @@ import com.linkview.data.database.dao.CardDao
 import com.linkview.data.database.dao.ContextUnitDao
 import com.linkview.data.database.dao.UnitReferenceDao
 import com.linkview.data.database.entity.CardEntity
+import com.linkview.data.database.entity.CardTagEntity
 import com.linkview.data.database.entity.ContextUnitEntity
 import com.linkview.data.database.entity.UnitReferenceEntity
 import com.linkview.domain.repository.BackupRepository
@@ -50,9 +52,11 @@ class BackupRepositoryImpl @Inject constructor(
                         references = refs
                     )
                 }
+                val domainCard = card.toDomain()
                 BackupCard(
                     id = card.id,
                     title = card.title,
+                    tags = domainCard.allTags,
                     type = card.type,
                     createdAt = card.createdAt,
                     updatedAt = card.updatedAt,
@@ -93,15 +97,24 @@ class BackupRepositoryImpl @Inject constructor(
                 val importedCardIds = envelope.cards.map { it.id }.toSet()
 
                 for (card in envelope.cards) {
-                    val cardEntity = CardEntity(
+                    val domainCard = Card(
                         id = card.id,
                         title = card.title.trim(),
+                        tags = card.allTags,
                         type = card.type?.trim()?.ifBlank { null },
                         createdAt = card.createdAt,
                         updatedAt = card.updatedAt
                     )
+                    val cardEntity = CardEntity.fromDomain(domainCard)
                     cardDao.upsertCard(cardEntity)
                     cardsImported++
+
+                    // Sync tags
+                    cardDao.deleteCardTagsForCard(card.id)
+                    val tagEntities = domainCard.allTags.map { CardTagEntity(cardId = card.id, tag = it) }
+                    if (tagEntities.isNotEmpty()) {
+                        cardDao.insertCardTags(tagEntities)
+                    }
 
                     if (mode == ImportMode.MERGE) {
                         contextUnitDao.deleteUnitsForCard(card.id)
@@ -121,12 +134,14 @@ class BackupRepositoryImpl @Inject constructor(
                         unitsImported += unitEntities.size
 
                         val references = mutableListOf<UnitReferenceEntity>()
-                        for (unit in unitEntities) {
-                            val targets = MentionTokenizer.extractReferences(unit.rawText)
-                            for (targetId in targets) {
-                                if (importedCardIds.contains(targetId) || cardDao.getCardById(targetId) != null) {
-                                    references.add(UnitReferenceEntity(unitId = unit.id, targetCardId = targetId))
-                                }
+                        for (unit in card.contextUnits) {
+                            for (refTargetId in unit.references) {
+                                references.add(
+                                    UnitReferenceEntity(
+                                        unitId = unit.id,
+                                        targetCardId = refTargetId
+                                    )
+                                )
                             }
                         }
                         if (references.isNotEmpty()) {

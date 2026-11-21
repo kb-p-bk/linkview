@@ -7,6 +7,9 @@ import kotlinx.coroutines.flow.Flow
 
 interface CardRepository {
     fun observeAllCards(): Flow<List<Card>>
+    fun observeCardsByTags(tags: List<String>): Flow<List<Card>>
+    fun observeAllTags(): Flow<List<String>>
+    fun searchTags(query: String): Flow<List<String>>
     fun observeCardWithContext(cardId: String): Flow<CardWithContext?>
     suspend fun getCardWithContext(cardId: String): CardWithContext?
     suspend fun getCardById(cardId: String): Card?

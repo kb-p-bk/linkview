@@ -40,13 +40,15 @@ class CardsViewModel @Inject constructor(
         viewModelScope.launch {
             cardRepository.observeAllCards().collect { cards ->
                 _uiState.update { state ->
-                    val defaultSelected = if (state.selectedCardId == null && cards.isNotEmpty()) {
-                        cards.first().id
-                    } else {
-                        state.selectedCardId
-                    }
-                    state.copy(allCards = cards, selectedCardId = defaultSelected)
+                    state.copy(allCards = cards)
                 }
+            }
+        }
+
+        // Observe distinct tags
+        viewModelScope.launch {
+            cardRepository.observeAllTags().collect { tags ->
+                _uiState.update { it.copy(allAvailableTags = tags) }
             }
         }
 
@@ -80,22 +82,47 @@ class CardsViewModel @Inject constructor(
     }
 
     fun onScopeSelected(scope: SearchScope) {
+        _uiState.update { it.copy(activeScope = scope) }
         viewModelScope.launch {
             preferencesRepository.setSearchScope(scope)
-            _uiState.update { it.copy(activeScope = scope) }
-            if (_uiState.value.searchQuery.isNotBlank()) {
-                searchCardsUseCase(_uiState.value.searchQuery, scope).collect { results ->
-                    _uiState.update { it.copy(searchResults = results) }
-                }
-            }
+        }
+        if (_uiState.value.isSearching) {
+            searchQueryFlow.value = _uiState.value.searchQuery
         }
     }
 
-    fun onTypeSelected(type: String?) {
-        _uiState.update { it.copy(selectedType = type) }
+    fun toggleTagFilter(tag: String) {
+        _uiState.update { state ->
+            val updated = state.selectedTags.toMutableSet()
+            if (updated.contains(tag)) {
+                updated.remove(tag)
+            } else {
+                updated.add(tag)
+            }
+            state.copy(selectedTags = updated)
+        }
     }
 
-    fun selectCard(cardId: String) {
+    fun clearTagFilters() {
+        _uiState.update { it.copy(selectedTags = emptySet(), tagSearchQuery = "") }
+    }
+
+    fun onTagSearchQueryChanged(query: String) {
+        _uiState.update { it.copy(tagSearchQuery = query) }
+    }
+
+    fun addAndSelectCustomTag(tag: String) {
+        val trimmed = tag.trim()
+        if (trimmed.isEmpty()) return
+        _uiState.update { state ->
+            state.copy(
+                selectedTags = state.selectedTags + trimmed,
+                tagSearchQuery = ""
+            )
+        }
+    }
+
+    fun selectCard(cardId: String?) {
         _uiState.update { it.copy(selectedCardId = cardId) }
     }
 }

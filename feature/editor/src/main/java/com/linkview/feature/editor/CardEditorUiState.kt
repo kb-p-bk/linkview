@@ -12,7 +12,9 @@ data class EditableUnit(
 data class CardEditorUiState(
     val cardId: String? = null,
     val title: String = "",
-    val type: String = "",
+    val tags: List<String> = emptyList(),
+    val allExistingTags: List<String> = emptyList(),
+    val tagInputText: String = "",
     val units: List<EditableUnit> = listOf(EditableUnit()),
     val duplicateCard: Card? = null,
     val activeMentionQuery: String? = null,

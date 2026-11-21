@@ -12,6 +12,7 @@ import com.linkview.data.database.dao.CardDao
 import com.linkview.data.database.dao.ContextUnitDao
 import com.linkview.data.database.dao.UnitReferenceDao
 import com.linkview.data.database.entity.CardEntity
+import com.linkview.data.database.entity.CardTagEntity
 import com.linkview.data.database.entity.ContextUnitEntity
 import com.linkview.data.database.entity.UnitReferenceEntity
 import com.linkview.domain.repository.CardRepository
@@ -36,6 +37,25 @@ class CardRepositoryImpl @Inject constructor(
         return cardDao.observeAllCards().map { entities ->
             entities.map { it.toDomain() }
         }.flowOn(dispatchers.io)
+    }
+
+    override fun observeCardsByTags(tags: List<String>): Flow<List<Card>> {
+        val cleanTags = tags.map { it.trim() }.filter { it.isNotEmpty() }
+        return if (cleanTags.isEmpty()) {
+            observeAllCards()
+        } else {
+            cardDao.observeCardsByTags(cleanTags, cleanTags.size).map { entities ->
+                entities.map { it.toDomain() }
+            }.flowOn(dispatchers.io)
+        }
+    }
+
+    override fun observeAllTags(): Flow<List<String>> {
+        return cardDao.observeAllTags().flowOn(dispatchers.io)
+    }
+
+    override fun searchTags(query: String): Flow<List<String>> {
+        return cardDao.searchTags(query.trim()).flowOn(dispatchers.io)
     }
 
     override fun observeCardWithContext(cardId: String): Flow<CardWithContext?> {
@@ -112,14 +132,15 @@ class CardRepositoryImpl @Inject constructor(
             }
 
             // Upsert card
-            val cardEntity = CardEntity(
-                id = card.id,
-                title = card.title.trim(),
-                type = card.type?.trim()?.ifBlank { null },
-                createdAt = card.createdAt,
-                updatedAt = System.currentTimeMillis()
-            )
+            val cardEntity = CardEntity.fromDomain(card)
             cardDao.upsertCard(cardEntity)
+
+            // Sync card tags
+            cardDao.deleteCardTagsForCard(card.id)
+            val tagEntities = card.allTags.map { CardTagEntity(cardId = card.id, tag = it) }
+            if (tagEntities.isNotEmpty()) {
+                cardDao.insertCardTags(tagEntities)
+            }
 
             // Delete previous units for this card
             contextUnitDao.deleteUnitsForCard(card.id)
@@ -161,11 +182,7 @@ class CardRepositoryImpl @Inject constructor(
         unitReferenceDao.countIncomingBacklinks(targetCardId)
     }
 
-    override suspend fun autocompleteCards(
-        query: String,
-        excludeCardId: String?,
-        limit: Int
-    ): List<Card> = withContext(dispatchers.io) {
+    override suspend fun autocompleteCards(query: String, excludeCardId: String?, limit: Int): List<Card> = withContext(dispatchers.io) {
         val trimmed = query.trim()
         val entities = if (excludeCardId != null) {
             cardDao.autocompleteCards(trimmed, excludeCardId, limit)
@@ -177,16 +194,6 @@ class CardRepositoryImpl @Inject constructor(
 
     override suspend fun getCardCount(): Int = withContext(dispatchers.io) {
         cardDao.getCardCount()
-    }
-
-    private fun CardEntity.toDomain(): Card {
-        return Card(
-            id = id,
-            title = title,
-            type = type,
-            createdAt = createdAt,
-            updatedAt = updatedAt
-        )
     }
 
     private fun ContextUnitEntity.toDomain(): ContextUnit {

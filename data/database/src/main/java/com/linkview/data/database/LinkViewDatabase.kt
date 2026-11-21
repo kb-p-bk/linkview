@@ -6,6 +6,7 @@ import com.linkview.data.database.dao.CardDao
 import com.linkview.data.database.dao.ContextUnitDao
 import com.linkview.data.database.dao.UnitReferenceDao
 import com.linkview.data.database.entity.CardEntity
+import com.linkview.data.database.entity.CardTagEntity
 import com.linkview.data.database.entity.ContextUnitEntity
 import com.linkview.data.database.entity.UnitReferenceEntity
 
@@ -13,9 +14,10 @@ import com.linkview.data.database.entity.UnitReferenceEntity
     entities = [
         CardEntity::class,
         ContextUnitEntity::class,
-        UnitReferenceEntity::class
+        UnitReferenceEntity::class,
+        CardTagEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class LinkViewDatabase : RoomDatabase() {

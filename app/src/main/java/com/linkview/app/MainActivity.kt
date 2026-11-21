@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -22,7 +21,6 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavType
@@ -59,7 +57,7 @@ class MainActivity : ComponentActivity() {
 
 /**
  * Top-level adaptive scaffold:
- * - Wide screens (>= 600dp, e.g. Samsung Galaxy Tab): Responsive Two-Pane Layout
+ * - Wide screens (>= 600dp, e.g. Samsung Galaxy Tab): Responsive Grid that transitions to Split View on card selection
  * - Compact screens (< 600dp, phones): Single-Pane Navigation Stack
  */
 @Composable
@@ -68,7 +66,7 @@ fun LinkViewAdaptiveApp() {
         val isExpandedTablet = maxWidth >= 600.dp
 
         if (isExpandedTablet) {
-            TabletTwoPaneLayout()
+            TabletResponsiveLayout()
         } else {
             PhoneSinglePaneNavHost()
         }
@@ -76,16 +74,18 @@ fun LinkViewAdaptiveApp() {
 }
 
 /**
- * Two-Pane Layout for Tablets (Samsung Galaxy Tab)
- * Left Pane: Cards list, Search & Scope filters (width 360dp)
- * Right Pane: Active Card Detail, Card Editor, or Backup Screen
+ * Responsive Layout for Tablets:
+ * - When no card is clicked: Full-width adaptive grid below the unified search/tag header.
+ * - When a card is clicked or editing: Opens split view below the header (Left: Cards Grid, Right: Detail/Editor).
  */
 @Composable
-private fun TabletTwoPaneLayout() {
+private fun TabletResponsiveLayout() {
     var activeCardId by remember { mutableStateOf<String?>(null) }
     var editingCardId by remember { mutableStateOf<String?>(null) }
     var isShowingBackup by remember { mutableStateOf(false) }
     val cardJumpHistory = remember { mutableStateListOf<String>() }
+
+    val isDetailOpen = activeCardId != null || editingCardId != null || isShowingBackup
 
     fun jumpToCard(targetCardId: String) {
         if (activeCardId != null && activeCardId != targetCardId) {
@@ -109,19 +109,27 @@ private fun TabletTwoPaneLayout() {
             activeCardId = cardJumpHistory.removeAt(cardJumpHistory.lastIndex)
             return true
         }
+        if (activeCardId != null) {
+            activeCardId = null
+            return true
+        }
         return false
     }
 
-    BackHandler(enabled = isShowingBackup || editingCardId != null || cardJumpHistory.isNotEmpty()) {
+    BackHandler(enabled = isDetailOpen) {
         handleTabletBack()
     }
 
     Row(modifier = Modifier.fillMaxSize()) {
-        // Left Pane: Search & Cards List
+        // Left Area: Cards Screen with Header & Responsive Grid
         Box(
-            modifier = Modifier
-                .width(360.dp)
-                .fillMaxHeight()
+            modifier = if (isDetailOpen) {
+                Modifier
+                    .width(380.dp)
+                    .fillMaxHeight()
+            } else {
+                Modifier.fillMaxSize()
+            }
         ) {
             CardsScreen(
                 selectedCardId = activeCardId,
@@ -139,53 +147,47 @@ private fun TabletTwoPaneLayout() {
             )
         }
 
-        VerticalDivider()
+        // Right Area: Split Pane Detail / Editor / Backup (opened only when active)
+        if (isDetailOpen) {
+            VerticalDivider()
 
-        // Right Pane: Detail View, Editor, or Backup
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxHeight()
-        ) {
-            when {
-                isShowingBackup -> {
-                    BackupScreen(
-                        onNavigateBack = { isShowingBackup = false }
-                    )
-                }
-                editingCardId != null -> {
-                    androidx.compose.runtime.key(editingCardId) {
-                        CardEditorScreen(
-                            cardId = editingCardId!!.ifEmpty { null },
-                            onNavigateBack = { editingCardId = null },
-                            onOpenExistingCard = { existingId ->
-                                jumpToCard(existingId)
-                            }
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+            ) {
+                when {
+                    isShowingBackup -> {
+                        BackupScreen(
+                            onNavigateBack = { isShowingBackup = false }
                         )
                     }
-                }
-                activeCardId != null -> {
-                    CardDetailScreen(
-                        cardId = activeCardId!!,
-                        showBackButton = cardJumpHistory.isNotEmpty(),
-                        onNavigateBack = { handleTabletBack() },
-                        onEditCard = { cardId -> editingCardId = cardId },
-                        onNavigateToCard = { targetId -> jumpToCard(targetId) },
-                        onDeleteSuccess = {
-                            activeCardId = null
-                            cardJumpHistory.clear()
+                    editingCardId != null -> {
+                        androidx.compose.runtime.key(editingCardId) {
+                            CardEditorScreen(
+                                cardId = editingCardId!!.ifEmpty { null },
+                                onNavigateBack = { editingCardId = null },
+                                onOpenExistingCard = { existingId ->
+                                    jumpToCard(existingId)
+                                }
+                            )
                         }
-                    )
-                }
-                else -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "Select a card to view its context and backlinks,\nor tap + to create a new one.",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                    activeCardId != null -> {
+                        CardDetailScreen(
+                            cardId = activeCardId!!,
+                            showBackButton = cardJumpHistory.isNotEmpty(),
+                            onClose = {
+                                activeCardId = null
+                                cardJumpHistory.clear()
+                            },
+                            onNavigateBack = { handleTabletBack() },
+                            onEditCard = { cardId -> editingCardId = cardId },
+                            onNavigateToCard = { targetId -> jumpToCard(targetId) },
+                            onDeleteSuccess = {
+                                activeCardId = null
+                                cardJumpHistory.clear()
+                            }
                         )
                     }
                 }

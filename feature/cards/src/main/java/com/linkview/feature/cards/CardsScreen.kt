@@ -13,19 +13,22 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -35,7 +38,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -44,21 +46,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.linkview.core.model.Card
+import com.linkview.core.model.Card as DomainCard
 import com.linkview.core.model.SearchResultItem
 import com.linkview.core.model.SearchScope
 import com.linkview.core.ui.components.HighlightedText
 
-private val FILTER_TYPES = listOf("All", "Person", "Event", "Place", "Institution", "Concept")
-
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CardsScreen(
     onCardClick: (cardId: String) -> Unit,
     onCreateCardClick: () -> Unit,
     onNavigateToBackup: () -> Unit,
     selectedCardId: String? = null,
-    showFloatingActionButton: Boolean = true,
+    showFloatingActionButton: Boolean = false,
     viewModel: CardsViewModel = hiltViewModel(),
     modifier: Modifier = Modifier
 ) {
@@ -66,16 +65,6 @@ fun CardsScreen(
 
     Scaffold(
         modifier = modifier,
-        topBar = {
-            TopAppBar(
-                title = { Text("Cards") },
-                actions = {
-                    IconButton(onClick = onNavigateToBackup) {
-                        Icon(Icons.Default.CloudDownload, contentDescription = "Backup & Restore")
-                    }
-                }
-            )
-        },
         floatingActionButton = {
             if (showFloatingActionButton) {
                 FloatingActionButton(onClick = onCreateCardClick) {
@@ -88,68 +77,155 @@ fun CardsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(horizontal = 16.dp)
         ) {
-            // Search Input
-            OutlinedTextField(
-                value = uiState.searchQuery,
-                onValueChange = { viewModel.onSearchQueryChanged(it) },
-                placeholder = { Text("Search cards and context...") },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                trailingIcon = {
-                    if (uiState.searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { viewModel.onSearchQueryChanged("") }) {
-                            Icon(Icons.Default.Clear, contentDescription = "Clear search")
-                        }
-                    }
-                },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Search Scope Filter Chips
-            Row(
+            // UNIFIED HEADER: Search, Add Card, Backup, Tag Search & Filters
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                SearchScope.entries.forEach { scope ->
-                    FilterChip(
-                        selected = uiState.activeScope == scope,
-                        onClick = { viewModel.onScopeSelected(scope) },
-                        label = { Text(scope.displayName) }
+                // Row 1: Search Bar + Add Button + Backup Button
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = uiState.searchQuery,
+                        onValueChange = { viewModel.onSearchQueryChanged(it) },
+                        placeholder = { Text("Search cards and context...") },
+                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                        trailingIcon = {
+                            if (uiState.searchQuery.isNotEmpty()) {
+                                IconButton(onClick = { viewModel.onSearchQueryChanged("") }) {
+                                    Icon(Icons.Default.Clear, contentDescription = "Clear search")
+                                }
+                            }
+                        },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
                     )
+
+                    Button(
+                        onClick = onCreateCardClick,
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Add")
+                    }
+
+                    IconButton(onClick = onNavigateToBackup) {
+                        Icon(Icons.Default.CloudDownload, contentDescription = "Backup & Restore")
+                    }
+                }
+
+                // Row 2: Tag Search & Multi-Tag Filter Chips
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = uiState.tagSearchQuery,
+                        onValueChange = { viewModel.onTagSearchQueryChanged(it) },
+                        placeholder = { Text("Tag filter...") },
+                        trailingIcon = {
+                            if (uiState.tagSearchQuery.isNotEmpty()) {
+                                IconButton(onClick = { viewModel.onTagSearchQueryChanged("") }) {
+                                    Icon(Icons.Default.Clear, contentDescription = "Clear tag query", modifier = Modifier.size(14.dp))
+                                }
+                            }
+                        },
+                        singleLine = true,
+                        modifier = Modifier.width(150.dp)
+                    )
+
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        FilterChip(
+                            selected = uiState.selectedTags.isEmpty(),
+                            onClick = { viewModel.clearTagFilters() },
+                            label = { Text("All") }
+                        )
+
+                        // If user typed a non-existent tag, offer "+ Tag [query]"
+                        val queryTrimmed = uiState.tagSearchQuery.trim()
+                        if (queryTrimmed.isNotEmpty() && !uiState.allAvailableTags.any { it.equals(queryTrimmed, ignoreCase = true) }) {
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                modifier = Modifier.clickable {
+                                    viewModel.addAndSelectCustomTag(queryTrimmed)
+                                }
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                ) {
+                                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(14.dp))
+                                    Spacer(modifier = Modifier.width(2.dp))
+                                    Text(
+                                        text = "+ Tag \"$queryTrimmed\"",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                            }
+                        }
+
+                        // Selected tags (with checkmark)
+                        uiState.selectedTags.forEach { tag ->
+                            FilterChip(
+                                selected = true,
+                                onClick = { viewModel.toggleTagFilter(tag) },
+                                label = { Text(tag) },
+                                leadingIcon = { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(14.dp)) }
+                            )
+                        }
+
+                        // Available unselected tags
+                        val unselectedTags = uiState.filteredAvailableTags.filterNot { tag ->
+                            uiState.selectedTags.any { it.equals(tag, ignoreCase = true) }
+                        }
+                        unselectedTags.forEach { tag ->
+                            FilterChip(
+                                selected = false,
+                                onClick = { viewModel.toggleTagFilter(tag) },
+                                label = { Text(tag) }
+                            )
+                        }
+                    }
+                }
+
+                // Row 3: Scope Filter Chips (only when searching or expanded)
+                if (uiState.isSearching) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        SearchScope.entries.forEach { scope ->
+                            FilterChip(
+                                selected = uiState.activeScope == scope,
+                                onClick = { viewModel.onScopeSelected(scope) },
+                                label = { Text(scope.displayName) }
+                            )
+                        }
+                    }
                 }
             }
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            // Category Filter Chips (All, Person, Event, Place, etc.)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                FILTER_TYPES.forEach { typeOption ->
-                    val isAll = typeOption == "All"
-                    val isSelected = if (isAll) uiState.selectedType == null else uiState.selectedType.equals(typeOption, ignoreCase = true)
-                    FilterChip(
-                        selected = isSelected,
-                        onClick = {
-                            viewModel.onTypeSelected(if (isAll) null else typeOption)
-                        },
-                        label = { Text(typeOption) }
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Results List
+            // BELOW HEADER: RESPONSIVE CARDS GRID (Rows of 1, 2, or 3+ depending on width)
             if (uiState.isLoading) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator()
@@ -165,13 +241,15 @@ fun CardsScreen(
                         )
                     }
                 } else {
-                    LazyColumn(
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(minSize = 220.dp),
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(bottom = 80.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 80.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         items(searchResults, key = { it.card.id }) { item ->
-                            SearchResultCardRow(
+                            SearchResultGridItem(
                                 item = item,
                                 searchQuery = uiState.searchQuery,
                                 isSelected = item.card.id == (selectedCardId ?: uiState.selectedCardId),
@@ -189,26 +267,28 @@ fun CardsScreen(
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
-                                text = if (uiState.selectedType != null) "No cards in '${uiState.selectedType}'" else "No cards yet",
+                                text = if (uiState.selectedTags.isNotEmpty()) "No cards matching selected tags" else "No cards yet",
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "Tap + to create a card",
+                                text = "Tap Add to create a card",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
                 } else {
-                    LazyColumn(
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(minSize = 220.dp),
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(bottom = 80.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 80.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         items(cards, key = { it.id }) { card ->
-                            CardListItemRow(
+                            CardGridItem(
                                 card = card,
                                 isSelected = card.id == (selectedCardId ?: uiState.selectedCardId),
                                 onClick = {
@@ -225,8 +305,8 @@ fun CardsScreen(
 }
 
 @Composable
-private fun CardListItemRow(
-    card: Card,
+private fun CardGridItem(
+    card: DomainCard,
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
@@ -234,57 +314,7 @@ private fun CardListItemRow(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isSelected) {
-                MaterialTheme.colorScheme.primaryContainer
-            } else {
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-            }
-        )
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = card.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                    color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
-                )
-            }
-            card.type?.let { type ->
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface
-                ) {
-                    Text(
-                        text = type,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SearchResultCardRow(
-    item: SearchResultItem,
-    searchQuery: String,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (isSelected) {
                 MaterialTheme.colorScheme.primaryContainer
@@ -298,35 +328,102 @@ private fun SearchResultCardRow(
                 .fillMaxWidth()
                 .padding(14.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                HighlightedText(
-                    text = item.card.title,
-                    highlight = searchQuery,
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                    modifier = Modifier.weight(1f)
-                )
-                item.card.type?.let { type ->
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.surface
-                    ) {
-                        Text(
-                            text = type,
-                            style = MaterialTheme.typography.labelSmall,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                        )
+            Text(
+                text = card.title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
+                color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+            )
+
+            val tags = card.allTags
+            if (tags.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    tags.forEach { tag ->
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface
+                        ) {
+                            Text(
+                                text = tag,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SearchResultGridItem(
+    item: SearchResultItem,
+    searchQuery: String,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isSelected) {
+                MaterialTheme.colorScheme.primaryContainer
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+            }
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp)
+        ) {
+            HighlightedText(
+                text = item.card.title,
+                highlight = searchQuery,
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold
+                ),
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            val tags = item.card.allTags
+            if (tags.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    tags.forEach { tag ->
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = MaterialTheme.colorScheme.surface
+                        ) {
+                            Text(
+                                text = tag,
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
                     }
                 }
             }
 
-            // Matching context snippets with query highlighting
             if (item.matchingSnippets.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(6.dp))
-                item.matchingSnippets.take(3).forEach { snippet ->
+                item.matchingSnippets.take(2).forEach { snippet ->
                     HighlightedText(
                         text = "“…$snippet…”",
                         highlight = searchQuery,

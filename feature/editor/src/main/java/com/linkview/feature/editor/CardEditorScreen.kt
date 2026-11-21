@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
@@ -179,29 +180,93 @@ fun CardEditorScreen(
                 isError = uiState.errorMessage != null && uiState.title.isBlank()
             )
 
-            // Type selector chips
-            Column {
+            // Multi-Tag Selector
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    text = "Type",
+                    text = "Tags (${uiState.tags.size})",
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Spacer(modifier = Modifier.height(4.dp))
+
+                // Selected Tag Chips
+                if (uiState.tags.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        uiState.tags.forEach { tag ->
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(start = 10.dp, end = 4.dp, top = 2.dp, bottom = 2.dp)
+                                ) {
+                                    Text(
+                                        text = tag,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                    IconButton(
+                                        onClick = { viewModel.removeTag(tag) },
+                                        modifier = Modifier.size(24.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Close,
+                                            contentDescription = "Remove tag",
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Inline Tag Input
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    DEFAULT_CARD_TYPES.forEach { presetType ->
-                        val selected = uiState.type.equals(presetType, ignoreCase = true)
-                        FilterChip(
-                            selected = selected,
-                            onClick = {
-                                viewModel.onTypeSelected(if (selected) "" else presetType)
-                            },
-                            label = { Text(presetType) }
-                        )
+                    OutlinedTextField(
+                        value = uiState.tagInputText,
+                        onValueChange = { viewModel.onTagInputChanged(it) },
+                        placeholder = { Text("Add tag (e.g. Late Republic, Consul)...") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Button(
+                        onClick = { viewModel.addTag(uiState.tagInputText) },
+                        enabled = uiState.tagInputText.isNotBlank()
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Add")
+                    }
+                }
+
+                // Quick Tag Suggestions
+                val suggestedTags = (DEFAULT_CARD_TYPES + uiState.allExistingTags).distinct().filterNot { tag ->
+                    uiState.tags.any { it.equals(tag, ignoreCase = true) }
+                }
+                if (suggestedTags.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        suggestedTags.forEach { presetType ->
+                            FilterChip(
+                                selected = false,
+                                onClick = { viewModel.addTag(presetType) },
+                                label = { Text("+ $presetType") }
+                            )
+                        }
                     }
                 }
             }

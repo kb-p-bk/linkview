@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import com.linkview.data.database.entity.CardEntity
+import com.linkview.data.database.entity.CardTagEntity
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -44,4 +45,32 @@ interface CardDao {
 
     @Query("DELETE FROM cards")
     suspend fun deleteAllCards()
+
+    // Tag operations
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertCardTags(tags: List<CardTagEntity>)
+
+    @Query("DELETE FROM card_tags WHERE cardId = :cardId")
+    suspend fun deleteCardTagsForCard(cardId: String)
+
+    @Query("SELECT DISTINCT tag FROM card_tags ORDER BY tag ASC")
+    fun observeAllTags(): Flow<List<String>>
+
+    @Query("SELECT DISTINCT tag FROM card_tags WHERE tag LIKE '%' || :query || '%' ORDER BY tag ASC LIMIT 20")
+    fun searchTags(query: String): Flow<List<String>>
+
+    @Query("SELECT tag FROM card_tags WHERE cardId = :cardId")
+    suspend fun getTagsForCard(cardId: String): List<String>
+
+    @Query("""
+        SELECT * FROM cards 
+        WHERE id IN (
+            SELECT cardId FROM card_tags 
+            WHERE tag IN (:tags) 
+            GROUP BY cardId 
+            HAVING COUNT(DISTINCT tag) = :tagCount
+        ) 
+        ORDER BY updatedAt DESC
+    """)
+    fun observeCardsByTags(tags: List<String>, tagCount: Int): Flow<List<CardEntity>>
 }

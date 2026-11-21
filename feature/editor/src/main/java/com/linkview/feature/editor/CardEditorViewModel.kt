@@ -32,6 +32,14 @@ class CardEditorViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(CardEditorUiState())
     val uiState: StateFlow<CardEditorUiState> = _uiState.asStateFlow()
 
+    init {
+        viewModelScope.launch {
+            cardRepository.observeAllTags().collect { tags ->
+                _uiState.update { it.copy(allExistingTags = tags) }
+            }
+        }
+    }
+
     fun loadCard(cardId: String?) {
         if (cardId == null) {
             _uiState.value = CardEditorUiState()
@@ -53,7 +61,7 @@ class CardEditorViewModel @Inject constructor(
                     it.copy(
                         cardId = cardWithContext.card.id,
                         title = cardWithContext.card.title,
-                        type = cardWithContext.card.type.orEmpty(),
+                        tags = cardWithContext.card.allTags,
                         units = editableUnits,
                         isLoading = false
                     )
@@ -80,8 +88,26 @@ class CardEditorViewModel @Inject constructor(
         }
     }
 
-    fun onTypeSelected(newType: String) {
-        _uiState.update { it.copy(type = newType) }
+    fun onTagInputChanged(input: String) {
+        _uiState.update { it.copy(tagInputText = input) }
+    }
+
+    fun addTag(tag: String) {
+        val trimmed = tag.trim()
+        if (trimmed.isEmpty()) return
+        _uiState.update { state ->
+            if (state.tags.any { it.equals(trimmed, ignoreCase = true) }) {
+                state.copy(tagInputText = "")
+            } else {
+                state.copy(tags = state.tags + trimmed, tagInputText = "")
+            }
+        }
+    }
+
+    fun removeTag(tag: String) {
+        _uiState.update { state ->
+            state.copy(tags = state.tags.filterNot { it.equals(tag, ignoreCase = true) })
+        }
     }
 
     fun addContextUnit() {
@@ -303,7 +329,8 @@ class CardEditorViewModel @Inject constructor(
             val card = Card(
                 id = cardId,
                 title = trimmedTitle,
-                type = currentState.type.trim().ifBlank { null }
+                tags = currentState.tags,
+                type = currentState.tags.firstOrNull()
             )
             val units = currentState.units
                 .filter { it.rawText.isNotBlank() }

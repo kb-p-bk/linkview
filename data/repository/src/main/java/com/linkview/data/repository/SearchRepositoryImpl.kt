@@ -136,14 +136,4 @@ class SearchRepositoryImpl @Inject constructor(
         }
         return allUnits
     }
-
-    private fun CardEntity.toDomain(): Card {
-        return Card(
-            id = id,
-            title = title,
-            type = type,
-            createdAt = createdAt,
-            updatedAt = updatedAt
-        )
-    }
 }
