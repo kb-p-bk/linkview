@@ -76,6 +76,11 @@ import com.linkview.core.ui.components.ContextUnitEditorRow
 import com.linkview.core.ui.components.RichMentionText
 import kotlinx.coroutines.launch
 
+private enum class ContextTab {
+    CONTEXT,
+    EXTRA_CONTEXT
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CardDetailScreen(
@@ -90,7 +95,10 @@ fun CardDetailScreen(
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
     var showJsonDialog by remember { mutableStateOf(false) }
+    var selectedContextTab by remember(cardId) { mutableStateOf(ContextTab.CONTEXT) }
 
     LaunchedEffect(cardId) {
         viewModel.loadCard(cardId)
@@ -166,7 +174,7 @@ fun CardDetailScreen(
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // Header: Title & Tags
             Column {
@@ -207,109 +215,183 @@ fun CardDetailScreen(
                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
             )
 
-            // Context Section
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer
+            // Context / Extra Context Switcher Row with Copy All Icon
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "Context (${cardWithContext.authoredUnits.size})",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                    )
+                    // Context Tab Chip
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = if (selectedContextTab == ContextTab.CONTEXT) {
+                            MaterialTheme.colorScheme.primaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                        },
+                        modifier = Modifier.clickable { selectedContextTab = ContextTab.CONTEXT }
+                    ) {
+                        Text(
+                            text = "Context (${cardWithContext.authoredUnits.size})",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = if (selectedContextTab == ContextTab.CONTEXT) FontWeight.Bold else FontWeight.Medium,
+                            color = if (selectedContextTab == ContextTab.CONTEXT) {
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                        )
+                    }
+
+                    // Extra Context Tab Chip
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = if (selectedContextTab == ContextTab.EXTRA_CONTEXT) {
+                            MaterialTheme.colorScheme.secondaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                        },
+                        modifier = Modifier.clickable {
+                            if (uiState.editingUnitIndex != null) {
+                                viewModel.cancelEditingUnit()
+                            }
+                            selectedContextTab = ContextTab.EXTRA_CONTEXT
+                        }
+                    ) {
+                        Text(
+                            text = "Extra Context (${cardWithContext.incomingBacklinks.size})",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = if (selectedContextTab == ContextTab.EXTRA_CONTEXT) FontWeight.Bold else FontWeight.Medium,
+                            color = if (selectedContextTab == ContextTab.EXTRA_CONTEXT) {
+                                MaterialTheme.colorScheme.onSecondaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                        )
+                    }
                 }
 
-                if (cardWithContext.authoredUnits.isEmpty()) {
-                    Text(
-                        text = "No context notes yet for this card.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                // Copy all context / extra context button
+                IconButton(
+                    onClick = {
+                        if (selectedContextTab == ContextTab.CONTEXT) {
+                            if (cardWithContext.authoredUnits.isEmpty()) {
+                                Toast.makeText(context, "No context notes to copy", Toast.LENGTH_SHORT).show()
+                            } else {
+                                val fullText = cardWithContext.authoredUnits.joinToString("\n\n") {
+                                    MentionTokenizer.stripCardUuids(it.rawText)
+                                }
+                                clipboardManager.setText(AnnotatedString(fullText))
+                                Toast.makeText(context, "Context copied to clipboard", Toast.LENGTH_SHORT).show()
+                            }
+                        } else {
+                            if (cardWithContext.incomingBacklinks.isEmpty()) {
+                                Toast.makeText(context, "No extra context to copy", Toast.LENGTH_SHORT).show()
+                            } else {
+                                val fullText = cardWithContext.incomingBacklinks.joinToString("\n\n") { backlink ->
+                                    "From @${backlink.sourceCardTitle}:\n${MentionTokenizer.stripCardUuids(backlink.rawText)}"
+                                }
+                                clipboardManager.setText(AnnotatedString(fullText))
+                                Toast.makeText(context, "Extra context copied to clipboard", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    },
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        Icons.Default.ContentCopy,
+                        contentDescription = if (selectedContextTab == ContextTab.CONTEXT) "Copy all context" else "Copy all extra context",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp)
                     )
-                } else {
-                    val activeIndex = uiState.editingUnitIndex
-                    if (activeIndex != null && uiState.editableUnits.isNotEmpty()) {
-                        // When editing a specific unit: render editable row for that unit, read cards for others
-                        uiState.editableUnits.forEachIndexed { index, editableUnit ->
-                            if (index == activeIndex) {
-                                key(editableUnit.id) {
-                                    ContextUnitEditorRow(
+                }
+            }
+
+            // Tab Content
+            if (selectedContextTab == ContextTab.CONTEXT) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (cardWithContext.authoredUnits.isEmpty()) {
+                        Text(
+                            text = "No context notes yet for this card.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        val activeIndex = uiState.editingUnitIndex
+                        if (activeIndex != null && uiState.editableUnits.isNotEmpty()) {
+                            // When editing a specific unit: render editable row for that unit, read cards for others
+                            uiState.editableUnits.forEachIndexed { index, editableUnit ->
+                                if (index == activeIndex) {
+                                    key(editableUnit.id) {
+                                        ContextUnitEditorRow(
+                                            index = index,
+                                            unit = editableUnit,
+                                            totalUnits = uiState.editableUnits.size,
+                                            isMentionActive = uiState.activeMentionQuery != null,
+                                            mentionQuery = uiState.activeMentionQuery,
+                                            suggestions = uiState.mentionSuggestions,
+                                            onTextChanged = { text, cursor ->
+                                                viewModel.onUnitTextChanged(index, text, cursor)
+                                            },
+                                            onMoveUp = { viewModel.moveEditingUnit(index, index - 1) },
+                                            onMoveDown = { viewModel.moveEditingUnit(index, index + 1) },
+                                            onInsertBelow = { viewModel.insertUnitAfterEditing(index) },
+                                            onDelete = { viewModel.deleteEditingUnit(index) },
+                                            onSelectMention = { card -> viewModel.selectMention(card) },
+                                            onQuickCreateMention = { title -> viewModel.quickCreateAndSelectMention(title) },
+                                            onSave = { viewModel.saveEditingUnit() },
+                                            onCancel = { viewModel.cancelEditingUnit() },
+                                            isSaving = uiState.isSavingUnit
+                                        )
+                                    }
+                                } else {
+                                    ReadOnlyUnitCard(
                                         index = index,
-                                        unit = editableUnit,
-                                        totalUnits = uiState.editableUnits.size,
-                                        isMentionActive = uiState.activeMentionQuery != null,
-                                        mentionQuery = uiState.activeMentionQuery,
-                                        suggestions = uiState.mentionSuggestions,
-                                        onTextChanged = { text, cursor ->
-                                            viewModel.onUnitTextChanged(index, text, cursor)
-                                        },
-                                        onMoveUp = { viewModel.moveEditingUnit(index, index - 1) },
-                                        onMoveDown = { viewModel.moveEditingUnit(index, index + 1) },
+                                        rawText = editableUnit.rawText,
+                                        onNavigateToCard = onNavigateToCard,
+                                        onEdit = { viewModel.startEditingUnit(index) },
                                         onInsertBelow = { viewModel.insertUnitAfterEditing(index) },
-                                        onDelete = { viewModel.deleteEditingUnit(index) },
-                                        onSelectMention = { card -> viewModel.selectMention(card) },
-                                        onQuickCreateMention = { title -> viewModel.quickCreateAndSelectMention(title) },
-                                        onSave = { viewModel.saveEditingUnit() },
-                                        onCancel = { viewModel.cancelEditingUnit() },
-                                        isSaving = uiState.isSavingUnit
+                                        onInsertAbove = { viewModel.insertUnitAbove(index) }
                                     )
                                 }
-                            } else {
+                            }
+                        } else {
+                            // All units in normal read mode
+                            cardWithContext.authoredUnits.forEachIndexed { index, unit ->
                                 ReadOnlyUnitCard(
                                     index = index,
-                                    rawText = editableUnit.rawText,
+                                    rawText = unit.rawText,
                                     onNavigateToCard = onNavigateToCard,
                                     onEdit = { viewModel.startEditingUnit(index) },
-                                    onInsertBelow = { viewModel.insertUnitAfterEditing(index) },
+                                    onInsertBelow = { viewModel.insertUnitBelow(index) },
                                     onInsertAbove = { viewModel.insertUnitAbove(index) }
                                 )
                             }
                         }
-                    } else {
-                        // All units in normal read mode
-                        cardWithContext.authoredUnits.forEachIndexed { index, unit ->
-                            ReadOnlyUnitCard(
-                                index = index,
-                                rawText = unit.rawText,
-                                onNavigateToCard = onNavigateToCard,
-                                onEdit = { viewModel.startEditingUnit(index) },
-                                onInsertBelow = { viewModel.insertUnitBelow(index) },
-                                onInsertAbove = { viewModel.insertUnitAbove(index) }
-                            )
-                        }
                     }
                 }
-            }
-
-            // Extra Context Section
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = MaterialTheme.colorScheme.secondaryContainer
-                ) {
-                    Text(
-                        text = "Extra Context (${cardWithContext.incomingBacklinks.size})",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                    )
-                }
-
-                if (cardWithContext.incomingBacklinks.isEmpty()) {
-                    Text(
-                        text = "No other cards mention @${cardWithContext.card.title} yet.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                } else {
-                    cardWithContext.incomingBacklinks.forEach { backlink ->
-                        BacklinkUnitCard(
-                            backlink = backlink,
-                            onNavigateToCard = onNavigateToCard
+            } else {
+                // Extra Context Tab Content
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (cardWithContext.incomingBacklinks.isEmpty()) {
+                        Text(
+                            text = "No other cards mention @${cardWithContext.card.title} yet.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                    } else {
+                        cardWithContext.incomingBacklinks.forEach { backlink ->
+                            BacklinkUnitCard(
+                                backlink = backlink,
+                                onNavigateToCard = onNavigateToCard
+                            )
+                        }
                     }
                 }
             }
@@ -322,8 +404,6 @@ fun CardDetailScreen(
             var editableJson by remember(cardWithContext) { mutableStateOf(formatCardToJson(cardWithContext)) }
             var jsonErrorMessage by remember { mutableStateOf<String?>(null) }
             var isSavingJson by remember { mutableStateOf(false) }
-            val context = LocalContext.current
-            val clipboardManager = LocalClipboardManager.current
             val coroutineScope = rememberCoroutineScope()
 
             AlertDialog(
@@ -610,7 +690,7 @@ private fun BacklinkUnitCard(
                 Box {
                     IconButton(
                         onClick = { isMenuExpanded = true },
-                        modifier = Modifier.size(28.dp)
+                        modifier = Modifier.size(24.dp)
                     ) {
                         Icon(
                             Icons.Default.MoreVert,
