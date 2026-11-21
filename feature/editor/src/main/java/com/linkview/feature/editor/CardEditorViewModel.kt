@@ -6,6 +6,7 @@ import com.linkview.core.common.Result
 import com.linkview.core.common.mention.MentionTokenizer
 import com.linkview.core.model.Card
 import com.linkview.core.model.ContextUnit
+import com.linkview.core.model.EditableUnit
 import com.linkview.domain.repository.CardRepository
 import com.linkview.domain.usecase.AutocompleteCardsUseCase
 import com.linkview.domain.usecase.CheckDuplicateTitleUseCase

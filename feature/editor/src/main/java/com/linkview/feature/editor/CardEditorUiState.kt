@@ -1,13 +1,7 @@
 package com.linkview.feature.editor
 
 import com.linkview.core.model.Card
-import java.util.UUID
-
-data class EditableUnit(
-    val id: String = UUID.randomUUID().toString(),
-    val rawText: String = "",
-    val cursorPosition: Int? = null
-)
+import com.linkview.core.model.EditableUnit
 
 data class CardEditorUiState(
     val cardId: String? = null,

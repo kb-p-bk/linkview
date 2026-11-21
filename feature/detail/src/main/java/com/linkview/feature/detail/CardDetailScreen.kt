@@ -1,6 +1,9 @@
 package com.linkview.feature.detail
 
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,16 +12,22 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.SubdirectoryArrowRight
@@ -28,10 +37,12 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -41,29 +52,25 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import android.widget.Toast
-import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.material.icons.filled.Code
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.linkview.core.common.Result
+import com.linkview.core.ui.components.ContextUnitEditorRow
 import com.linkview.core.ui.components.RichMentionText
 import kotlinx.coroutines.launch
 
@@ -94,6 +101,10 @@ fun CardDetailScreen(
         }
     }
 
+    BackHandler(enabled = uiState.isEditingUnits) {
+        viewModel.cancelEditingUnits()
+    }
+
     Scaffold(
         modifier = modifier,
         topBar = {
@@ -113,14 +124,26 @@ fun CardDetailScreen(
                 },
                 actions = {
                     if (uiState.cardWithContext != null) {
-                        IconButton(onClick = { showJsonDialog = true }) {
-                            Icon(Icons.Default.Code, contentDescription = "View & Copy Card JSON")
-                        }
-                        IconButton(onClick = { onEditCard(cardId) }) {
-                            Icon(Icons.Default.Edit, contentDescription = "Edit Card")
-                        }
-                        IconButton(onClick = { viewModel.requestDelete() }) {
-                            Icon(Icons.Default.Delete, contentDescription = "Delete Card")
+                        if (uiState.isEditingUnits) {
+                            IconButton(onClick = { viewModel.cancelEditingUnits() }) {
+                                Icon(Icons.Default.Close, contentDescription = "Cancel Editing")
+                            }
+                            IconButton(
+                                onClick = { viewModel.saveEditingUnits() },
+                                enabled = !uiState.isSavingUnits
+                            ) {
+                                Icon(Icons.Default.Check, contentDescription = "Save Context Units")
+                            }
+                        } else {
+                            IconButton(onClick = { showJsonDialog = true }) {
+                                Icon(Icons.Default.Code, contentDescription = "View & Copy Card JSON")
+                            }
+                            IconButton(onClick = { onEditCard(cardId) }) {
+                                Icon(Icons.Default.Edit, contentDescription = "Edit Card")
+                            }
+                            IconButton(onClick = { viewModel.requestDelete() }) {
+                                Icon(Icons.Default.Delete, contentDescription = "Delete Card")
+                            }
                         }
                     }
                     if (onClose != null) {
@@ -130,6 +153,57 @@ fun CardDetailScreen(
                     }
                 }
             )
+        },
+        floatingActionButton = {
+            if (uiState.cardWithContext != null) {
+                if (uiState.isEditingUnits) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        FilledTonalButton(
+                            onClick = { viewModel.cancelEditingUnits() }
+                        ) {
+                            Text("Cancel")
+                        }
+                        Button(
+                            onClick = { viewModel.saveEditingUnits() },
+                            enabled = !uiState.isSavingUnits
+                        ) {
+                            if (uiState.isSavingUnits) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.onPrimary
+                                )
+                            } else {
+                                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Save")
+                            }
+                        }
+                    }
+                } else {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.9f),
+                        tonalElevation = 2.dp,
+                        shadowElevation = 3.dp
+                    ) {
+                        IconButton(
+                            onClick = { viewModel.startEditingUnits() },
+                            modifier = Modifier.size(44.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Edit,
+                                contentDescription = "Edit Context Units",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
+            }
         }
     ) { innerPadding ->
         if (uiState.isLoading) {
@@ -196,113 +270,221 @@ fun CardDetailScreen(
 
             // Context Section
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer
-                ) {
-                    Text(
-                        text = "Context (${cardWithContext.authoredUnits.size})",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                    )
-                }
-
-                if (cardWithContext.authoredUnits.isEmpty()) {
-                    Text(
-                        text = "No context notes yet for this card.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                } else {
-                    cardWithContext.authoredUnits.forEach { unit ->
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                if (uiState.isEditingUnits) {
+                    // Inline Edit Header
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer
                         ) {
-                            Column(modifier = Modifier.padding(12.dp)) {
-                                RichMentionText(
-                                    rawText = unit.rawText,
-                                    onCardClick = onNavigateToCard
-                                )
+                            Text(
+                                text = "Editing Context (${uiState.editableUnits.size})",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                            )
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            TextButton(onClick = { viewModel.cancelEditingUnits() }) {
+                                Text("Cancel")
+                            }
+                            Button(
+                                onClick = { viewModel.saveEditingUnits() },
+                                enabled = !uiState.isSavingUnits
+                            ) {
+                                if (uiState.isSavingUnits) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(16.dp),
+                                        strokeWidth = 2.dp,
+                                        color = MaterialTheme.colorScheme.onPrimary
+                                    )
+                                } else {
+                                    Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Save")
+                                }
+                            }
+                        }
+                    }
+
+                    // Editable Units Rows
+                    uiState.editableUnits.forEachIndexed { index, editableUnit ->
+                        key(editableUnit.id) {
+                            ContextUnitEditorRow(
+                                index = index,
+                                unit = editableUnit,
+                                totalUnits = uiState.editableUnits.size,
+                                isMentionActive = uiState.activeUnitIndex == index,
+                                mentionQuery = uiState.activeMentionQuery,
+                                suggestions = if (uiState.activeUnitIndex == index) uiState.mentionSuggestions else emptyList(),
+                                onTextChanged = { text, cursor ->
+                                    viewModel.onUnitTextChanged(index, text, cursor)
+                                },
+                                onMoveUp = { viewModel.moveContextUnit(index, index - 1) },
+                                onMoveDown = { viewModel.moveContextUnit(index, index + 1) },
+                                onDelete = { viewModel.removeContextUnit(index) },
+                                onSelectMention = { card -> viewModel.selectMention(card) },
+                                onQuickCreateMention = { title -> viewModel.quickCreateAndSelectMention(title) }
+                            )
+                        }
+                    }
+
+                    // Add Context Unit button
+                    OutlinedButton(
+                        onClick = { viewModel.addContextUnit() },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Add Context Unit")
+                    }
+                } else {
+                    // Read Mode Header
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer
+                        ) {
+                            Text(
+                                text = "Context (${cardWithContext.authoredUnits.size})",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                            )
+                        }
+                    }
+
+                    if (cardWithContext.authoredUnits.isEmpty()) {
+                        Text(
+                            text = "No context notes yet for this card.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        cardWithContext.authoredUnits.forEachIndexed { index, unit ->
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    SelectionContainer {
+                                        RichMentionText(
+                                            rawText = unit.rawText,
+                                            onCardClick = onNavigateToCard
+                                        )
+                                    }
+
+                                    // Inconspicuous edit icon on bottom right of each unit card
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.End
+                                    ) {
+                                        IconButton(
+                                            onClick = { viewModel.startEditingUnits(targetUnitIndex = index) },
+                                            modifier = Modifier.size(28.dp)
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Edit,
+                                                contentDescription = "Edit unit",
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
+                                                modifier = Modifier.size(15.dp)
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
                 }
             }
 
-            // Extra Context Section
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = MaterialTheme.colorScheme.secondaryContainer
-                ) {
-                    Text(
-                        text = "Extra Context (${cardWithContext.incomingBacklinks.size})",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                    )
-                }
+            // Extra Context Section (only shown when not editing units)
+            if (!uiState.isEditingUnits) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.secondaryContainer
+                    ) {
+                        Text(
+                            text = "Extra Context (${cardWithContext.incomingBacklinks.size})",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                        )
+                    }
 
-                if (cardWithContext.incomingBacklinks.isEmpty()) {
-                    Text(
-                        text = "No other cards mention @${cardWithContext.card.title} yet.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                } else {
-                    cardWithContext.incomingBacklinks.forEach { backlink ->
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                        ) {
-                            Column(modifier = Modifier.padding(12.dp)) {
-                                // Jump Source Chip
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = MaterialTheme.colorScheme.primaryContainer,
-                                    modifier = Modifier.clickable { onNavigateToCard(backlink.sourceCardId) }
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    if (cardWithContext.incomingBacklinks.isEmpty()) {
+                        Text(
+                            text = "No other cards mention @${cardWithContext.card.title} yet.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        cardWithContext.incomingBacklinks.forEach { backlink ->
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    // Jump Source Chip
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = MaterialTheme.colorScheme.primaryContainer,
+                                        modifier = Modifier.clickable { onNavigateToCard(backlink.sourceCardId) }
                                     ) {
-                                        Icon(
-                                            Icons.Default.SubdirectoryArrowRight,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                            modifier = Modifier.size(14.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(
-                                            text = "From: ${backlink.sourceCardTitle}",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                        ) {
+                                            Icon(
+                                                Icons.Default.SubdirectoryArrowRight,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                text = "From: ${backlink.sourceCardTitle}",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(8.dp))
+
+                                    SelectionContainer {
+                                        RichMentionText(
+                                            rawText = backlink.rawText,
+                                            onCardClick = onNavigateToCard
                                         )
                                     }
                                 }
-
-                                Spacer(modifier = Modifier.height(8.dp))
-
-                                RichMentionText(
-                                    rawText = backlink.rawText,
-                                    onCardClick = onNavigateToCard
-                                )
                             }
                         }
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(48.dp))
         }
 
         // Card JSON view, copy & edit dialog
-        if (showJsonDialog && cardWithContext != null) {
+        if (showJsonDialog) {
             var editableJson by remember(cardWithContext) { mutableStateOf(formatCardToJson(cardWithContext)) }
             var jsonErrorMessage by remember { mutableStateOf<String?>(null) }
             var isSavingJson by remember { mutableStateOf(false) }
@@ -418,7 +600,7 @@ fun CardDetailScreen(
                         if (uiState.referencingBacklinkCount > 0) {
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "⚠️ ${uiState.referencingBacklinkCount} context unit(s) from other cards reference this card.",
+                                text = "${uiState.referencingBacklinkCount} context unit(s) from other cards reference this card.",
                                 color = MaterialTheme.colorScheme.error,
                                 fontWeight = FontWeight.SemiBold
                             )
