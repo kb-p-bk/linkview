@@ -5,6 +5,7 @@ import com.linkview.core.model.CardCollection
 import com.linkview.core.model.CardSortOrder
 import com.linkview.core.model.SearchResultItem
 import com.linkview.core.model.SearchScope
+import com.linkview.domain.usecase.SearchCardsUseCase
 
 data class CardsUiState(
     val searchQuery: String = "",
@@ -26,6 +27,15 @@ data class CardsUiState(
         get() = collections.firstOrNull { it.id == activeCollectionId }?.name ?: CardCollection.DEFAULT_NAME
 
     val isSearching: Boolean get() = searchQuery.isNotBlank()
+
+    val cleanSearchQuery: String
+        get() = SearchCardsUseCase.parseQuery(searchQuery).first
+
+    val parsedScope: SearchScope?
+        get() = SearchCardsUseCase.parseQuery(searchQuery).second
+
+    val effectiveScope: SearchScope
+        get() = parsedScope ?: activeScope
 
     /**
      * Tags filtered by the tag search bar in the header

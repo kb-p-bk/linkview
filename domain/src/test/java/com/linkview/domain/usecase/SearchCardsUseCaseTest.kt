@@ -52,4 +52,49 @@ class SearchCardsUseCaseTest {
             assertEquals("Gaius Marius", items[0].card.title)
         }
     }
+
+    @Test
+    fun `title prefix overrides scope to TITLE_ONLY`() = runTest {
+        val results = listOf(
+            SearchResultItem(card = Card("1", "Gaius Marius"), matchingSnippets = emptyList())
+        )
+        every { searchRepository.search("Marius", SearchScope.TITLE_ONLY) } returns flowOf(results)
+
+        useCase("title:Marius", explicitScope = SearchScope.CONTEXT_ONLY).collect { items ->
+            assertEquals(1, items.size)
+            assertEquals("Gaius Marius", items[0].card.title)
+        }
+    }
+
+    @Test
+    fun `short t prefix overrides scope to TITLE_ONLY`() = runTest {
+        val results = listOf(
+            SearchResultItem(card = Card("1", "Gaius Marius"), matchingSnippets = emptyList())
+        )
+        every { searchRepository.search("Marius", SearchScope.TITLE_ONLY) } returns flowOf(results)
+
+        useCase("t:Marius", explicitScope = SearchScope.TITLE_AND_CONTEXT).collect { items ->
+            assertEquals(1, items.size)
+            assertEquals("Gaius Marius", items[0].card.title)
+        }
+    }
+
+    @Test
+    fun `context prefix overrides scope to CONTEXT_ONLY`() = runTest {
+        val results = listOf(
+            SearchResultItem(card = Card("1", "Gaius Marius"), matchingSnippets = emptyList())
+        )
+        every { searchRepository.search("reforms", SearchScope.CONTEXT_ONLY) } returns flowOf(results)
+
+        useCase("context:reforms", explicitScope = SearchScope.TITLE_ONLY).collect { items ->
+            assertEquals(1, items.size)
+        }
+    }
+
+    @Test
+    fun `empty query after prefix emits empty list`() = runTest {
+        useCase("title:").collect { items ->
+            assertEquals(0, items.size)
+        }
+    }
 }

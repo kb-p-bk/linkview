@@ -234,7 +234,7 @@ fun CardsHeader(
                 CompactSearchBar(
                     value = uiState.searchQuery,
                     onValueChange = onSearchQueryChanged,
-                    placeholderText = "Search cards...",
+                    placeholderText = "Search cards (or title:name)...",
                     leadingIcon = {
                         Icon(
                             Icons.Default.Search,
@@ -553,8 +553,19 @@ fun CardsHeader(
                 ) {
                     SearchScope.entries.forEach { scope ->
                         FilterChip(
-                            selected = uiState.activeScope == scope,
-                            onClick = { onScopeSelected(scope) },
+                            selected = uiState.effectiveScope == scope,
+                            onClick = {
+                                if (uiState.parsedScope != null) {
+                                    val clean = uiState.cleanSearchQuery
+                                    when (scope) {
+                                        SearchScope.TITLE_ONLY -> onSearchQueryChanged("title:$clean")
+                                        SearchScope.CONTEXT_ONLY -> onSearchQueryChanged("context:$clean")
+                                        SearchScope.TITLE_AND_CONTEXT -> onSearchQueryChanged(clean)
+                                    }
+                                } else {
+                                    onScopeSelected(scope)
+                                }
+                            },
                             label = { Text(scope.displayName) }
                         )
                     }
@@ -617,7 +628,7 @@ fun CardsGridContent(
             if (searchResults.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
-                        text = "No cards matching '${uiState.searchQuery}'",
+                        text = if (uiState.cleanSearchQuery.isBlank()) "Type a search term..." else "No cards matching '${uiState.cleanSearchQuery}'",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -645,7 +656,7 @@ fun CardsGridContent(
                                 ) {
                                     SearchResultGridItem(
                                         item = item,
-                                        searchQuery = uiState.searchQuery,
+                                        searchQuery = uiState.cleanSearchQuery,
                                         isSelected = item.card.id == (selectedCardId ?: uiState.selectedCardId),
                                         onClick = { onCardClick(item.card.id) },
                                         modifier = Modifier.fillMaxSize()
