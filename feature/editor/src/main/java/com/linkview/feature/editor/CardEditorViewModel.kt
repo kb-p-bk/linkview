@@ -34,12 +34,12 @@ class CardEditorViewModel @Inject constructor(
 
     fun loadCard(cardId: String?) {
         if (cardId == null) {
-            _uiState.update { it.copy(cardId = null, title = "", type = "", units = listOf(EditableUnit())) }
+            _uiState.value = CardEditorUiState()
             return
         }
 
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, cardId = cardId) }
+            _uiState.value = CardEditorUiState(cardId = cardId, isLoading = true)
             val cardWithContext = getCardDetailUseCase.getOnce(cardId)
             if (cardWithContext != null) {
                 val editableUnits = if (cardWithContext.authoredUnits.isNotEmpty()) {
@@ -62,6 +62,14 @@ class CardEditorViewModel @Inject constructor(
                 _uiState.update { it.copy(isLoading = false, errorMessage = "Card not found") }
             }
         }
+    }
+
+    fun resetState() {
+        _uiState.value = CardEditorUiState()
+    }
+
+    fun resetSaveSuccess() {
+        _uiState.update { it.copy(saveSuccess = false) }
     }
 
     fun onTitleChanged(newTitle: String) {
@@ -114,7 +122,7 @@ class CardEditorViewModel @Inject constructor(
         _uiState.update { state ->
             val updated = state.units.toMutableList()
             if (index in updated.indices) {
-                updated[index] = updated[index].copy(rawText = text)
+                updated[index] = updated[index].copy(rawText = text, cursorPosition = cursorPosition)
             }
             state.copy(units = updated)
         }
@@ -125,24 +133,47 @@ class CardEditorViewModel @Inject constructor(
         val atIndex = textBeforeCursor.lastIndexOf('@')
 
         if (atIndex != -1) {
-            val queryCandidate = textBeforeCursor.substring(atIndex + 1)
-            // Query is valid if it doesn't cross newlines or closing bracket/parenthesis
-            if (!queryCandidate.contains('\n') && !queryCandidate.contains(']') && queryCandidate.length < 40) {
-                _uiState.update {
-                    it.copy(
-                        activeMentionQuery = queryCandidate,
-                        activeUnitIndex = index
-                    )
+            val candidateFromAt = textBeforeCursor.substring(atIndex)
+            // Query is invalid if it crosses newlines or closing/opening brackets
+            val isInsideExistingToken = candidateFromAt.contains('\n') || 
+                candidateFromAt.contains('[') || 
+                candidateFromAt.contains(']')
+
+            if (!isInsideExistingToken) {
+                // Determine word boundary after atIndex + 1 in full text
+                var wordEndIndex = atIndex + 1
+                while (wordEndIndex < text.length) {
+                    val c = text[wordEndIndex]
+                    if (c.isWhitespace() || c == '[' || c == ']' || c == '(' || c == ')' ||
+                        c == ',' || c == '.' || c == ';' || c == '!' || c == '?' || c == ':' || c == '"') {
+                        break
+                    }
+                    wordEndIndex++
                 }
-                viewModelScope.launch {
-                    val suggestions = autocompleteCardsUseCase(
-                        query = queryCandidate,
-                        excludeCardId = _uiState.value.cardId,
-                        limit = 8
-                    )
-                    _uiState.update { it.copy(mentionSuggestions = suggestions) }
+
+                // Range covers from atIndex up to wordEndIndex (or cursor if cursor moved beyond)
+                val actualEndIndex = maxOf(wordEndIndex, safeCursor)
+                val queryCandidate = text.substring(atIndex + 1, actualEndIndex)
+
+                if (queryCandidate.length < 50) {
+                    _uiState.update {
+                        it.copy(
+                            activeMentionQuery = queryCandidate,
+                            activeUnitIndex = index,
+                            mentionStartIndex = atIndex,
+                            mentionEndIndex = actualEndIndex
+                        )
+                    }
+                    viewModelScope.launch {
+                        val suggestions = autocompleteCardsUseCase(
+                            query = queryCandidate,
+                            excludeCardId = _uiState.value.cardId,
+                            limit = 8
+                        )
+                        _uiState.update { it.copy(mentionSuggestions = suggestions) }
+                    }
+                    return
                 }
-                return
             }
         }
 
@@ -151,30 +182,78 @@ class CardEditorViewModel @Inject constructor(
             it.copy(
                 activeMentionQuery = null,
                 activeUnitIndex = null,
+                mentionStartIndex = -1,
+                mentionEndIndex = -1,
                 mentionSuggestions = emptyList()
             )
         }
     }
 
     fun selectMention(card: Card) {
-        val activeIndex = _uiState.value.activeUnitIndex ?: return
-        val currentUnits = _uiState.value.units
+        val state = _uiState.value
+        val activeIndex = state.activeUnitIndex ?: return
+        val currentUnits = state.units
         if (activeIndex !in currentUnits.indices) return
 
         val text = currentUnits[activeIndex].rawText
-        val atIndex = text.lastIndexOf('@')
-        if (atIndex == -1) return
+        val startIndex = state.mentionStartIndex
+        val endIndex = state.mentionEndIndex
 
-        val token = MentionTokenizer.formatToken(card.title, card.id) + " "
-        val newText = text.substring(0, atIndex) + token
+        // Validate mention start
+        val safeStart = if (startIndex in 0 until text.length && text[startIndex] == '@') {
+            startIndex
+        } else {
+            text.lastIndexOf('@').takeIf { it != -1 } ?: return
+        }
 
-        _uiState.update { state ->
-            val updated = state.units.toMutableList()
-            updated[activeIndex] = updated[activeIndex].copy(rawText = newText)
-            state.copy(
+        // Validate mention end
+        val safeEnd = if (endIndex in (safeStart + 1)..text.length) {
+            endIndex
+        } else {
+            var next = safeStart + 1
+            while (next < text.length) {
+                val c = text[next]
+                if (c.isWhitespace() || c == '[' || c == ']' || c == '(' || c == ')' ||
+                    c == ',' || c == '.' || c == ';' || c == '!' || c == '?' || c == ':' || c == '"') {
+                    break
+                }
+                next++
+            }
+            next
+        }
+
+        val prefix = text.substring(0, safeStart)
+        var suffix = text.substring(safeEnd)
+
+        // If suffix starts with a space, strip one leading space so formatToken's trailing space doesn't double-space
+        val tokenHasTrailingSpace = !suffix.startsWith(",") && !suffix.startsWith(".") && 
+            !suffix.startsWith(";") && !suffix.startsWith("!") && !suffix.startsWith("?")
+        
+        if (suffix.startsWith(" ")) {
+            suffix = suffix.substring(1)
+        }
+
+        val token = if (tokenHasTrailingSpace) {
+            MentionTokenizer.formatToken(card.title, card.id) + " "
+        } else {
+            MentionTokenizer.formatToken(card.title, card.id)
+        }
+
+        val newText = prefix + token + suffix
+        val newCursorPosition = (prefix + token).length
+
+        _uiState.update { current ->
+            val updated = current.units.toMutableList()
+            updated[activeIndex] = updated[activeIndex].copy(
+                rawText = newText,
+                cursorPosition = newCursorPosition
+            )
+            current.copy(
                 units = updated,
                 activeMentionQuery = null,
                 activeUnitIndex = null,
+                mentionStartIndex = -1,
+                mentionEndIndex = -1,
                 mentionSuggestions = emptyList()
             )
         }
@@ -203,6 +282,8 @@ class CardEditorViewModel @Inject constructor(
             it.copy(
                 activeMentionQuery = null,
                 activeUnitIndex = null,
+                mentionStartIndex = -1,
+                mentionEndIndex = -1,
                 mentionSuggestions = emptyList()
             )
         }

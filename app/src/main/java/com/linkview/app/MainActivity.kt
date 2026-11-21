@@ -154,13 +154,15 @@ private fun TabletTwoPaneLayout() {
                     )
                 }
                 editingCardId != null -> {
-                    CardEditorScreen(
-                        cardId = editingCardId!!.ifEmpty { null },
-                        onNavigateBack = { editingCardId = null },
-                        onOpenExistingCard = { existingId ->
-                            jumpToCard(existingId)
-                        }
-                    )
+                    androidx.compose.runtime.key(editingCardId) {
+                        CardEditorScreen(
+                            cardId = editingCardId!!.ifEmpty { null },
+                            onNavigateBack = { editingCardId = null },
+                            onOpenExistingCard = { existingId ->
+                                jumpToCard(existingId)
+                            }
+                        )
+                    }
                 }
                 activeCardId != null -> {
                     CardDetailScreen(

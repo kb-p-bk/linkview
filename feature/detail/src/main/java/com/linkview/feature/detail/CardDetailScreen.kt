@@ -145,17 +145,34 @@ fun CardDetailScreen(
                 }
             }
 
-            // Authored Context Units Section
+            // Context (Intra Context) Section
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    text = "Authored Context (${cardWithContext.authoredUnits.size})",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Context (${cardWithContext.authoredUnits.size})",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+                    ) {
+                        Text(
+                            text = "Intra Context",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                        )
+                    }
+                }
 
                 if (cardWithContext.authoredUnits.isEmpty()) {
                     Text(
-                        text = "No context notes authored yet for this card.",
+                        text = "No context notes yet for this card.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -182,7 +199,7 @@ fun CardDetailScreen(
                 }
             }
 
-            // Incoming Context (Backlinks) Section
+            // Extra Context Section
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -190,10 +207,21 @@ fun CardDetailScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Incoming Context / Backlinks (${cardWithContext.incomingBacklinks.size})",
+                        text = "Extra Context (${cardWithContext.incomingBacklinks.size})",
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.secondary
                     )
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f)
+                    ) {
+                        Text(
+                            text = "Backlinks",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                        )
+                    }
                 }
 
                 if (cardWithContext.incomingBacklinks.isEmpty()) {

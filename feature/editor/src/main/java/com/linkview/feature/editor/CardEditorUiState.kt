@@ -5,7 +5,8 @@ import java.util.UUID
 
 data class EditableUnit(
     val id: String = UUID.randomUUID().toString(),
-    val rawText: String = ""
+    val rawText: String = "",
+    val cursorPosition: Int? = null
 )
 
 data class CardEditorUiState(
@@ -16,6 +17,8 @@ data class CardEditorUiState(
     val duplicateCard: Card? = null,
     val activeMentionQuery: String? = null,
     val activeUnitIndex: Int? = null,
+    val mentionStartIndex: Int = -1,
+    val mentionEndIndex: Int = -1,
     val mentionSuggestions: List<Card> = emptyList(),
     val isLoading: Boolean = false,
     val isSaving: Boolean = false,

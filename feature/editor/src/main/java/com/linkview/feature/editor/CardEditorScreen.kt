@@ -43,6 +43,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -70,12 +71,16 @@ fun CardEditorScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    LaunchedEffect(cardId) {
+    DisposableEffect(cardId) {
         viewModel.loadCard(cardId)
+        onDispose {
+            viewModel.resetState()
+        }
     }
 
     LaunchedEffect(uiState.saveSuccess) {
         if (uiState.saveSuccess) {
+            viewModel.resetSaveSuccess()
             onNavigateBack()
         }
     }
@@ -265,9 +270,10 @@ private fun ContextUnitEditorRow(
 
     // Sync external changes (e.g. mention inserted)
     if (textFieldValue.text != unit.rawText) {
+        val newSelection = unit.cursorPosition?.coerceIn(0, unit.rawText.length) ?: unit.rawText.length
         textFieldValue = textFieldValue.copy(
             text = unit.rawText,
-            selection = TextRange(unit.rawText.length)
+            selection = TextRange(newSelection)
         )
     }
 
