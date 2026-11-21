@@ -48,7 +48,9 @@ class CardEditorViewModel @Inject constructor(
     private val cardRepository: CardRepository
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(CardEditorUiState())
+    private var cachedExistingTags: List<String> = DEFAULT_CARD_TYPES
+
+    private val _uiState = MutableStateFlow(CardEditorUiState(allExistingTags = DEFAULT_CARD_TYPES))
     val uiState: StateFlow<CardEditorUiState> = _uiState.asStateFlow()
 
     private val mentionQueryFlow = MutableStateFlow<MentionQueryData?>(null)
@@ -57,6 +59,7 @@ class CardEditorViewModel @Inject constructor(
         viewModelScope.launch {
             cardRepository.observeAllTags().collect { tags ->
                 val sortedTags = (tags + DEFAULT_CARD_TYPES).distinct()
+                cachedExistingTags = sortedTags
                 _uiState.update { it.copy(allExistingTags = sortedTags) }
             }
         }
@@ -85,13 +88,14 @@ class CardEditorViewModel @Inject constructor(
     }
 
     fun loadCard(cardId: String?) {
+        val tagsSnapshot = cachedExistingTags.ifEmpty { _uiState.value.allExistingTags }
         if (cardId == null) {
-            _uiState.value = CardEditorUiState()
+            _uiState.value = CardEditorUiState(allExistingTags = tagsSnapshot)
             return
         }
 
         viewModelScope.launch {
-            _uiState.value = CardEditorUiState(cardId = cardId, isLoading = true)
+            _uiState.value = CardEditorUiState(cardId = cardId, isLoading = true, allExistingTags = tagsSnapshot)
             val cardWithContext = getCardDetailUseCase.getOnce(cardId)
             if (cardWithContext != null) {
                 val editableUnits = if (cardWithContext.authoredUnits.isNotEmpty()) {
@@ -101,11 +105,14 @@ class CardEditorViewModel @Inject constructor(
                 } else {
                     listOf(EditableUnit())
                 }
+                val combinedTags = (tagsSnapshot + cardWithContext.card.allTags).distinct()
+                cachedExistingTags = combinedTags
                 _uiState.update {
                     it.copy(
                         cardId = cardWithContext.card.id,
                         title = cardWithContext.card.title,
                         tags = cardWithContext.card.allTags,
+                        allExistingTags = combinedTags,
                         units = editableUnits,
                         isLoading = false
                     )
@@ -118,7 +125,8 @@ class CardEditorViewModel @Inject constructor(
 
     fun resetState() {
         mentionQueryFlow.value = null
-        _uiState.value = CardEditorUiState()
+        val tagsSnapshot = cachedExistingTags.ifEmpty { _uiState.value.allExistingTags }
+        _uiState.value = CardEditorUiState(allExistingTags = tagsSnapshot)
     }
 
     fun resetSaveSuccess() {
@@ -140,11 +148,15 @@ class CardEditorViewModel @Inject constructor(
     fun addTag(tag: String) {
         val trimmed = tag.trim()
         if (trimmed.isEmpty()) return
+        if (!cachedExistingTags.contains(trimmed)) {
+            cachedExistingTags = (cachedExistingTags + trimmed).distinct()
+        }
         _uiState.update { state ->
+            val updatedExisting = (state.allExistingTags + trimmed).distinct()
             if (state.tags.any { it.equals(trimmed, ignoreCase = true) }) {
-                state.copy(tagInputText = "")
+                state.copy(tagInputText = "", allExistingTags = updatedExisting)
             } else {
-                state.copy(tags = state.tags + trimmed, tagInputText = "")
+                state.copy(tags = state.tags + trimmed, tagInputText = "", allExistingTags = updatedExisting)
             }
         }
     }

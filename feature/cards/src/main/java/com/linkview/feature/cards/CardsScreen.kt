@@ -173,8 +173,9 @@ fun CardsHeader(
 
                     // Tag Autocomplete Dropdown
                     val tagQuery = uiState.tagSearchQuery.trim()
-                    val matchingTags = uiState.allAvailableTags.filter { it.contains(tagQuery, ignoreCase = true) }
-                    val showCreateOption = tagQuery.isNotBlank() && !uiState.allAvailableTags.any { it.equals(tagQuery, ignoreCase = true) }
+                    val allCandidateTags = (uiState.allAvailableTags + uiState.selectedTags).distinct()
+                    val matchingTags = allCandidateTags.filter { it.contains(tagQuery, ignoreCase = true) }
+                    val showCreateOption = tagQuery.isNotBlank() && !allCandidateTags.any { it.equals(tagQuery, ignoreCase = true) }
 
                     DropdownMenu(
                         expanded = isTagDropdownExpanded && (matchingTags.isNotEmpty() || showCreateOption),
@@ -197,7 +198,7 @@ fun CardsHeader(
                         }
                         if (showCreateOption) {
                             DropdownMenuItem(
-                                text = { Text("+ Create \"$tagQuery\"") },
+                                text = { Text("\"$tagQuery\"") },
                                 leadingIcon = { Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp)) },
                                 onClick = {
                                     onAddAndSelectTag(tagQuery)

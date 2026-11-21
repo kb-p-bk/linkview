@@ -286,7 +286,7 @@ fun CardEditorScreen(
                         }
                         if (isNewTag) {
                             DropdownMenuItem(
-                                text = { Text("+ Add \"$inputQuery\"") },
+                                text = { Text("\"$inputQuery\"") },
                                 leadingIcon = { Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp)) },
                                 onClick = {
                                     viewModel.addTag(inputQuery)

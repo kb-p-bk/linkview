@@ -41,8 +41,10 @@ class CardsViewModel @Inject constructor(
         // Observe all cards
         viewModelScope.launch {
             cardRepository.observeAllCards().collect { cards ->
+                val allCardTags = cards.flatMap { it.allTags }
                 _uiState.update { state ->
-                    state.copy(allCards = cards)
+                    val combined = (state.allAvailableTags + allCardTags).distinct()
+                    state.copy(allCards = cards, allAvailableTags = combined)
                 }
             }
         }
@@ -50,7 +52,8 @@ class CardsViewModel @Inject constructor(
         // Observe distinct tags (most used recently first)
         viewModelScope.launch {
             cardRepository.observeAllTags().collect { tags ->
-                val sortedTags = (tags + DEFAULT_CARD_TYPES).distinct()
+                val allCardTags = _uiState.value.allCards.flatMap { it.allTags }
+                val sortedTags = (tags + DEFAULT_CARD_TYPES + allCardTags).distinct()
                 _uiState.update { it.copy(allAvailableTags = sortedTags) }
             }
         }

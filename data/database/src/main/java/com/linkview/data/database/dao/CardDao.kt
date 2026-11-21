@@ -54,29 +54,43 @@ interface CardDao {
     suspend fun deleteCardTagsForCard(cardId: String)
 
     @Query("""
-        SELECT ct.tag 
-        FROM card_tags ct
-        JOIN cards c ON ct.cardId = c.id
-        GROUP BY ct.tag
-        ORDER BY MAX(c.updatedAt) DESC, COUNT(ct.cardId) DESC, ct.tag COLLATE NOCASE ASC
+        SELECT tag FROM (
+            SELECT ct.tag AS tag, MAX(c.updatedAt) AS maxUpdated, COUNT(ct.cardId) AS cardCount
+            FROM card_tags ct
+            JOIN cards c ON ct.cardId = c.id
+            GROUP BY ct.tag
+            UNION
+            SELECT type AS tag, updatedAt AS maxUpdated, 1 AS cardCount
+            FROM cards
+            WHERE type IS NOT NULL AND type != ''
+        )
+        GROUP BY tag
+        ORDER BY MAX(maxUpdated) DESC, SUM(cardCount) DESC, tag COLLATE NOCASE ASC
     """)
     fun observeAllTags(): Flow<List<String>>
 
     @Query("""
-        SELECT ct.tag 
-        FROM card_tags ct
-        JOIN cards c ON ct.cardId = c.id
-        WHERE ct.tag LIKE '%' || :query || '%' COLLATE NOCASE
-        GROUP BY ct.tag
+        SELECT tag FROM (
+            SELECT ct.tag AS tag, MAX(c.updatedAt) AS maxUpdated, COUNT(ct.cardId) AS cardCount
+            FROM card_tags ct
+            JOIN cards c ON ct.cardId = c.id
+            WHERE ct.tag LIKE '%' || :query || '%' COLLATE NOCASE
+            GROUP BY ct.tag
+            UNION
+            SELECT type AS tag, updatedAt AS maxUpdated, 1 AS cardCount
+            FROM cards
+            WHERE type IS NOT NULL AND type != '' AND type LIKE '%' || :query || '%' COLLATE NOCASE
+        )
+        GROUP BY tag
         ORDER BY 
             CASE 
-                WHEN LOWER(ct.tag) = LOWER(:query) THEN 0
-                WHEN LOWER(ct.tag) LIKE LOWER(:query) || '%' THEN 1
+                WHEN LOWER(tag) = LOWER(:query) THEN 0
+                WHEN LOWER(tag) LIKE LOWER(:query) || '%' THEN 1
                 ELSE 2 
             END,
-            MAX(c.updatedAt) DESC, 
-            COUNT(ct.cardId) DESC, 
-            ct.tag COLLATE NOCASE ASC
+            MAX(maxUpdated) DESC, 
+            SUM(cardCount) DESC, 
+            tag COLLATE NOCASE ASC
         LIMIT 20
     """)
     fun searchTags(query: String): Flow<List<String>>

@@ -185,18 +185,12 @@ fun CardDetailScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 } else {
-                    cardWithContext.authoredUnits.forEachIndexed { index, unit ->
+                    cardWithContext.authoredUnits.forEach { unit ->
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
                         ) {
                             Column(modifier = Modifier.padding(12.dp)) {
-                                Text(
-                                    text = "#${index + 1}",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
                                 RichMentionText(
                                     rawText = unit.rawText,
                                     onCardClick = onNavigateToCard
