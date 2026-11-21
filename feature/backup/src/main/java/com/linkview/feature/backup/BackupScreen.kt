@@ -3,6 +3,7 @@ package com.linkview.feature.backup
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -600,50 +601,60 @@ fun BackupScreen(
             )
         }
 
-        // Import Mode Decision Dialog (Merge vs Replace All)
+        // Import Mode Decision Dialog (Sync Merge vs Overwrite Merge vs Replace All)
         if (uiState.showImportModeDialog) {
             AlertDialog(
                 onDismissRequest = { viewModel.cancelImport() },
                 title = { Text("Choose Import Mode") },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text("How would you like to import this backup file?")
+                        Text("Select how to merge or restore this backup file:")
                         Surface(
                             shape = RoundedCornerShape(8.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { viewModel.confirmImport(ImportMode.SYNC_MERGE) }
                         ) {
                             Column(modifier = Modifier.padding(10.dp)) {
-                                Text("1. Merge / Upsert", fontWeight = FontWeight.Bold)
-                                Text("Adds new cards and updates matching existing cards without deleting anything else.", style = MaterialTheme.typography.bodySmall)
+                                Text("1. Sync Merge (Recommended)", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                Text("Auto-resolves edits using timestamps: only incoming cards with newer edits update local cards; your newer local edits are preserved.", style = MaterialTheme.typography.bodySmall)
                             }
                         }
                         Surface(
                             shape = RoundedCornerShape(8.dp),
-                            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
-                            modifier = Modifier.fillMaxWidth()
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { viewModel.confirmImport(ImportMode.MERGE) }
                         ) {
                             Column(modifier = Modifier.padding(10.dp)) {
-                                Text("2. Replace All", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
-                                Text("Wipes current database tables and restores purely from the imported file.", style = MaterialTheme.typography.bodySmall)
+                                Text("2. Overwrite Merge", fontWeight = FontWeight.Bold)
+                                Text("Unconditionally updates matching local cards with incoming file data, adding any new cards.", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { viewModel.confirmImport(ImportMode.REPLACE_ALL) }
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                Text("3. Replace All", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
+                                Text("Wipes current collection and restores purely from the imported file.", style = MaterialTheme.typography.bodySmall)
                             }
                         }
                     }
                 },
                 confirmButton = {
-                    Button(onClick = { viewModel.confirmImport(ImportMode.MERGE) }) {
-                        Text("Merge")
+                    Button(onClick = { viewModel.confirmImport(ImportMode.SYNC_MERGE) }) {
+                        Text("Sync Merge")
                     }
                 },
                 dismissButton = {
-                    Row {
-                        TextButton(onClick = { viewModel.confirmImport(ImportMode.REPLACE_ALL) }) {
-                            Text("Replace All", color = MaterialTheme.colorScheme.error)
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        TextButton(onClick = { viewModel.cancelImport() }) {
-                            Text("Cancel")
-                        }
+                    TextButton(onClick = { viewModel.cancelImport() }) {
+                        Text("Cancel")
                     }
                 }
             )

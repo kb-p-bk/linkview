@@ -133,6 +133,7 @@ class BackupRepositoryImpl @Inject constructor(
                 val now = System.currentTimeMillis()
                 val titleToIdMap = mutableMapOf<String, String>()
                 val processedTitles = mutableSetOf<String>()
+                val skippedCardIds = mutableSetOf<String>()
 
                 // Pass 1: Upsert all explicitly declared cards in envelope first
                 for (card in envelope.cards) {
@@ -141,6 +142,18 @@ class BackupRepositoryImpl @Inject constructor(
 
                     val lowerTitle = cardTitle.lowercase()
                     val existingCard = cardDao.getCardByExactTitle(collectionId, cardTitle)
+
+                    if (mode == ImportMode.SYNC_MERGE && existingCard != null) {
+                        // Compare updatedAt: if local card is newer or equal, preserve local card
+                        val incomingUpdatedAt = card.updatedAt
+                        val localUpdatedAt = existingCard.updatedAt
+                        if (incomingUpdatedAt > 0L && localUpdatedAt >= incomingUpdatedAt) {
+                            titleToIdMap[lowerTitle] = existingCard.id
+                            skippedCardIds.add(existingCard.id)
+                            continue
+                        }
+                    }
+
                     val cardId = when {
                         card.id.isNotBlank() -> card.id
                         existingCard != null -> existingCard.id
@@ -150,13 +163,14 @@ class BackupRepositoryImpl @Inject constructor(
                     titleToIdMap[lowerTitle] = cardId
 
                     val createdAt = if (card.createdAt > 0L) card.createdAt else (existingCard?.createdAt ?: now)
+                    val updatedAt = if (card.updatedAt > 0L) card.updatedAt else now
                     val domainCard = Card(
                         id = cardId,
                         title = cardTitle,
                         tags = card.allTags,
                         type = card.type?.trim()?.ifBlank { null },
                         createdAt = createdAt,
-                        updatedAt = now,
+                        updatedAt = updatedAt,
                         collectionId = collectionId
                     )
                     cardDao.upsertCard(CardEntity.fromDomain(domainCard))
@@ -171,7 +185,7 @@ class BackupRepositoryImpl @Inject constructor(
                         cardDao.insertCardTags(tagEntities)
                     }
 
-                    if (mode == ImportMode.MERGE) {
+                    if (mode == ImportMode.MERGE || mode == ImportMode.SYNC_MERGE) {
                         contextUnitDao.deleteUnitsForCard(cardId)
                     }
                 }
@@ -181,6 +195,11 @@ class BackupRepositoryImpl @Inject constructor(
                     val cardTitle = card.title.trim()
                     if (cardTitle.isEmpty()) continue
                     val cardId = titleToIdMap[cardTitle.lowercase()] ?: card.id.ifBlank { null } ?: continue
+
+                    // If local card was newer in SYNC_MERGE, keep local units and skip overwriting from file
+                    if (skippedCardIds.contains(cardId)) {
+                        continue
+                    }
 
                     // Support both structured contextUnits and shorthand units: List<String>
                     val rawUnits = when {
