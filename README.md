@@ -15,13 +15,14 @@ Traditional note-taking applications organize information into long, monolithic 
 - Context Unit Reordering: Context units can be rearranged dynamically within the card editor using persistent Move Up and Move Down controls.
 - Keyboard-Aware Mention Autocomplete: Typing `@` inside any context unit activates inline card autocomplete suggestions anchored cleanly above the text field, preventing the software keyboard from obscuring results.
 - Automatic Card Stubbing: Referencing uncreated cards via mentions (`@[Card Title]`) or imported JSON automatically creates stub cards in the database and establishes incoming backlinks immediately.
-- Rich Text Formatting: Context units render inline Markdown formatting including **bold**, *italic*, `code`, and ~~strikethrough~~.
+- Rich Text Formatting: Context units render Markdown formatting including unordered bullet lists (`- ` or `* ` with optional indentation), **bold**, *italic*, `code`, and ~~strikethrough~~.
+- Dual Export Portability: Export cards into clean Human-Readable JSON (titles, tags, units) for viewing and sharing, or Full System Backups (UUIDs, timestamps, and relational envelope) for complete device-to-device restores.
 - Bidirectional Linking: Real-time relationship graphing distinguishing between direct card notes and incoming backlinks.
 - Multi-Tag Filtering and AND-Queries: Assign multiple tags to cards with relational intersection search and dynamic tag autocompletion.
 - Duplicate Title Prevention: Enforces card title uniqueness with duplicate detection and an instant "Open" navigation shortcut.
 - Tablet-Optimized Split View: Responsive layout featuring a full-width search header and a 38-62 proportional split view between the card grid and card content on tablets and foldable devices.
-- Declarative JSON Data Exchange: Clean JSON dialog for copying, inspecting, and editing card JSON directly, plus bulk paste ingestion in the Backup screen.
-- Complete Offline Privacy: All cards, context units, and relation graphs are stored locally in private SQLite storage using Room. No external servers or network access required.
+- Declarative JSON Data Exchange: Clean JSON dialog for copying, inspecting, and editing card JSON directly, plus bulk paste ingestion and export in the Backup screen.
+- Complete Offline SQLite Storage: All cards, context units, and relation graphs are stored locally on-device in SQLite using Android's Room library (`linkview.db`). No cloud servers, external accounts, or network permissions required.
 
 ## Declarative JSON Format and Data Exchange
 
@@ -68,11 +69,51 @@ Multiple cards can be grouped into an array for batch importing or backups:
 ]
 ```
 
-### JSON Import, Export, and In-Place Editing
+### Export Options and Portability
+
+LinkView clearly distinguishes between two export formats on the Backup & Portability screen:
+
+1. Readable Cards (.json):
+   - Emits a clean JSON array of all cards with `title`, `tags`, and `units`.
+   - Free of internal UUIDs, sortOrder, timestamps, or system wrapper objects.
+   - Ideal for human reading, sharing, text editing, and scripting.
+   - Can be saved as a file (`linkview-cards-readable-YYYY-MM-DD.json`) or copied directly to the clipboard.
+
+2. Full System Backup (.json):
+   - Emits a versioned envelope (`BackupEnvelope`) preserving exact internal UUIDs, timestamps, sort orders, and card types.
+   - Ideal for lossless device-to-device migration and disaster recovery.
+   - Saved as `linkview-full-backup-YYYY-MM-DD.json`.
+
+### JSON Import and In-Place Editing
 
 - View, Copy, and Edit Card JSON: Tap the code icon (`</>`) on any card's detail screen to inspect, copy, or directly edit its JSON representation. Saving changes in the dialog updates the card, its tags, and its context units in real time.
-- Paste JSON Ingestion: Navigate to the Backup screen and tap "Paste JSON" to paste raw card JSON or arrays of cards directly into LinkView.
+- Paste JSON Ingestion: Navigate to the Backup screen and tap "Paste JSON" to paste raw card JSON or arrays of cards directly into LinkView. LinkView automatically handles schema detection, UUID generation, and auto-stubbing.
 - Mention Syntax: Mentions in context units use the `@` or `@[Target Title]` format. If the target card does not yet exist, LinkView automatically creates a new stub card for it.
+
+## Local SQLite Database Architecture
+
+All application data is persisted locally in an on-device SQLite database named `linkview.db`, managed via Android's first-party Room persistence library (`androidx.room`). No external databases or cloud networks are used.
+
+The relational schema consists of four tables:
+
+1. `cards`:
+   - Primary key: `id` (UUID String)
+   - Columns: `title` (unique per card), `type`, `tagsCsv`, `created_at`, `updated_at`
+
+2. `context_units`:
+   - Primary key: `id` (UUID String)
+   - Foreign key: `source_card_id` referencing `cards(id)` with `ON DELETE CASCADE`
+   - Columns: `sort_order`, `raw_text`, `plain_text`
+
+3. `unit_references` (Junction Table):
+   - Primary key: Composite `(unit_id, target_card_id)`
+   - Foreign keys: `unit_id` referencing `context_units(id)` with `ON DELETE CASCADE`, and `target_card_id` referencing `cards(id)` with `ON DELETE CASCADE`
+   - Purpose: Enables sub-millisecond reverse-lookup queries to find incoming backlinks ("Extra Context") without full table scans
+
+4. `card_tags`:
+   - Primary key: Composite `(card_id, tag)`
+   - Foreign key: `card_id` referencing `cards(id)` with `ON DELETE CASCADE`
+   - Purpose: Indexes card tags for fast intersection filtering and autocompletion
 
 ## Architecture
 

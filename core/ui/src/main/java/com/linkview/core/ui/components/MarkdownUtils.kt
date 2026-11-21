@@ -11,7 +11,27 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 
 /**
+ * Converts markdown list markers (- and *) at the beginning of lines to bullet points (•),
+ * preserving any leading indentation.
+ */
+fun formatBulletPoints(markdown: String): String {
+    if (markdown.isEmpty()) return markdown
+    val bulletRegex = Regex("""^(\s*)[-*]\s+(.*)$""")
+    return markdown.lines().joinToString("\n") { line ->
+        val match = bulletRegex.matchEntire(line)
+        if (match != null) {
+            val indent = match.groupValues[1]
+            val rest = match.groupValues[2]
+            "$indent• $rest"
+        } else {
+            line
+        }
+    }
+}
+
+/**
  * Parses inline Markdown formatting into an [AnnotatedString]:
+ * - Bullet lists: `- item` or `* item` -> `• item`
  * - Inline code: `` `code` ``
  * - Bold + Italic: `***text***`
  * - Bold: `**text**`
@@ -24,14 +44,16 @@ fun parseMarkdownToAnnotatedString(
 ): AnnotatedString {
     if (markdown.isEmpty()) return AnnotatedString("")
 
+    val formattedMarkdown = formatBulletPoints(markdown)
+
     return buildAnnotatedString {
         val regex = Regex("""(`([^`]+)`)|\*\*\*([^*]+)\*\*\*|\*\*([^*]+)\*\*|\*([^*]+)\*|~~([^~]+)~~""")
         var lastIndex = 0
 
-        for (match in regex.findAll(markdown)) {
+        for (match in regex.findAll(formattedMarkdown)) {
             val range = match.range
             if (range.first > lastIndex) {
-                append(markdown.substring(lastIndex, range.first))
+                append(formattedMarkdown.substring(lastIndex, range.first))
             }
 
             when {
@@ -79,8 +101,8 @@ fun parseMarkdownToAnnotatedString(
             lastIndex = range.last + 1
         }
 
-        if (lastIndex < markdown.length) {
-            append(markdown.substring(lastIndex))
+        if (lastIndex < formattedMarkdown.length) {
+            append(formattedMarkdown.substring(lastIndex))
         }
     }
 }

@@ -46,4 +46,46 @@ class MarkdownUtilsTest {
         val result = parseMarkdownToAnnotatedString(input)
         assertEquals(input, result.text)
     }
+
+    @Test
+    fun `hyphen bullet points are converted to bullet symbols`() {
+        val input = "- First point\n- Second point"
+        val result = parseMarkdownToAnnotatedString(input)
+        assertEquals("• First point\n• Second point", result.text)
+    }
+
+    @Test
+    fun `asterisk bullet points are converted to bullet symbols`() {
+        val input = "* First point\n* Second point"
+        val result = parseMarkdownToAnnotatedString(input)
+        assertEquals("• First point\n• Second point", result.text)
+    }
+
+    @Test
+    fun `indented bullet points preserve indentation`() {
+        val input = "- Main point\n  - Sub point\n    - Deep sub point"
+        val result = parseMarkdownToAnnotatedString(input)
+        assertEquals("• Main point\n  • Sub point\n    • Deep sub point", result.text)
+    }
+
+    @Test
+    fun `bullet points with inline bold and italic formatting`() {
+        val input = "- Item with **bold** and *italic*"
+        val result = parseMarkdownToAnnotatedString(input)
+        assertEquals("• Item with bold and italic", result.text)
+    }
+
+    @Test
+    fun `hyphen in middle of text is not converted to bullet`() {
+        val input = "This is 5 - 3 = 2 and a well-known hyphenated word"
+        val result = parseMarkdownToAnnotatedString(input)
+        assertEquals(input, result.text)
+    }
+
+    @Test
+    fun `negative number or horizontal rule is not converted`() {
+        val input = "-10 degrees and --- separator"
+        val result = parseMarkdownToAnnotatedString(input)
+        assertEquals(input, result.text)
+    }
 }

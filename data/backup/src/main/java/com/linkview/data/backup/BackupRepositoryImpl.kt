@@ -80,6 +80,22 @@ class BackupRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun exportHumanReadableJson(): Result<String> = withContext(dispatchers.io) {
+        runCatchingResult {
+            val allCards = cardDao.getAllCardsList()
+            val readableCards = allCards.map { card ->
+                val units = contextUnitDao.getUnitsForCard(card.id)
+                val domainCard = card.toDomain()
+                com.linkview.core.model.ReadableCard(
+                    title = card.title,
+                    tags = domainCard.allTags,
+                    units = units.map { it.rawText }
+                )
+            }
+            serializer.encodeReadableCardsToString(readableCards)
+        }
+    }
+
     override suspend fun importJson(jsonContent: String, mode: ImportMode): Result<ImportSummary> = withContext(dispatchers.io) {
         runCatchingResult {
             val envelope = serializer.decodeFromString(jsonContent)

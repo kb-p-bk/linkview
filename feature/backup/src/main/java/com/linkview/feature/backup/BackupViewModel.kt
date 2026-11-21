@@ -23,7 +23,7 @@ class BackupViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(BackupUiState())
     val uiState: StateFlow<BackupUiState> = _uiState.asStateFlow()
 
-    fun exportData(onDataReady: (jsonContent: String) -> Unit) {
+    fun exportFullBackup(onDataReady: (jsonContent: String) -> Unit) {
         viewModelScope.launch {
             _uiState.update { it.copy(isExporting = true, errorMessage = null, statusMessage = null) }
             when (val result = exportCardsUseCase()) {
@@ -35,7 +35,7 @@ class BackupViewModel @Inject constructor(
                     _uiState.update {
                         it.copy(
                             isExporting = false,
-                            errorMessage = result.message ?: "Failed to generate export data."
+                            errorMessage = result.message ?: "Failed to generate full backup data."
                         )
                     }
                 }
@@ -44,8 +44,31 @@ class BackupViewModel @Inject constructor(
         }
     }
 
-    fun onExportSavedSuccess() {
-        _uiState.update { it.copy(statusMessage = "Backup successfully exported!") }
+    fun exportHumanReadable(onDataReady: (jsonContent: String) -> Unit) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isExporting = true, errorMessage = null, statusMessage = null) }
+            when (val result = exportCardsUseCase.exportHumanReadable()) {
+                is Result.Success -> {
+                    _uiState.update { it.copy(isExporting = false) }
+                    onDataReady(result.data)
+                }
+                is Result.Error -> {
+                    _uiState.update {
+                        it.copy(
+                            isExporting = false,
+                            errorMessage = result.message ?: "Failed to generate readable export data."
+                        )
+                    }
+                }
+                is Result.Loading -> Unit
+            }
+        }
+    }
+
+    fun exportData(onDataReady: (jsonContent: String) -> Unit) = exportFullBackup(onDataReady)
+
+    fun onExportSavedSuccess(message: String = "Backup successfully exported!") {
+        _uiState.update { it.copy(statusMessage = message) }
     }
 
     fun onFileSelectedForImport(jsonString: String) {

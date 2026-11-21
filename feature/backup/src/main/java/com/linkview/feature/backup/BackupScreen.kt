@@ -20,10 +20,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
-import androidx.compose.material.icons.filled.ContentPaste
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -31,10 +31,12 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -47,7 +49,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -68,8 +72,10 @@ fun BackupScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
 
     var pendingExportJson by remember { mutableStateOf<String?>(null) }
+    var pendingExportSuccessMsg by remember { mutableStateOf("Backup successfully exported!") }
     var showPasteDialog by remember { mutableStateOf(false) }
     var pastedJsonText by remember { mutableStateOf("") }
 
@@ -82,7 +88,7 @@ fun BackupScreen(
                 context.contentResolver.openOutputStream(uri)?.use { outputStream ->
                     outputStream.write(pendingExportJson!!.toByteArray(Charsets.UTF_8))
                 }
-                viewModel.onExportSavedSuccess()
+                viewModel.onExportSavedSuccess(pendingExportSuccessMsg)
             } catch (e: Exception) {
                 // Handled gracefully
             } finally {
@@ -189,30 +195,108 @@ fun BackupScreen(
                 }
             }
 
-            // Export Card
+            // Human-Readable Export Card
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+            ) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Readable Cards (JSON)",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer
+                        ) {
+                            Text(
+                                text = "Clean format",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Clean, human-readable JSON array of cards with titles, tags, and context units. Free of database UUIDs, timestamps, and schema wrappers. Perfect for reading, sharing, external edits, or AI tools.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Button(
+                            onClick = {
+                                viewModel.exportHumanReadable { jsonString ->
+                                    pendingExportJson = jsonString
+                                    pendingExportSuccessMsg = "Readable cards successfully saved!"
+                                    val dateStr = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+                                    exportFileLauncher.launch("linkview-cards-readable-$dateStr.json")
+                                }
+                            },
+                            enabled = !uiState.isExporting && !uiState.isImporting
+                        ) {
+                            if (uiState.isExporting) {
+                                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                                Spacer(modifier = Modifier.width(8.dp))
+                            } else {
+                                Icon(Icons.Default.FileDownload, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                            }
+                            Text("Save Readable JSON")
+                        }
+
+                        FilledTonalButton(
+                            onClick = {
+                                viewModel.exportHumanReadable { jsonString ->
+                                    clipboardManager.setText(AnnotatedString(jsonString))
+                                    viewModel.onExportSavedSuccess("Readable cards JSON copied to clipboard!")
+                                }
+                            },
+                            enabled = !uiState.isExporting && !uiState.isImporting
+                        ) {
+                            Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Copy JSON")
+                        }
+                    }
+                }
+            }
+
+            // Full System Backup Card
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
                     Text(
-                        text = "Export Backup",
+                        text = "Full System Backup (JSON)",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.SemiBold
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "Exports all Cards, Context Units, ordering, and cross-references into a versioned JSON envelope.",
+                        text = "Complete database archive including internal UUIDs, context unit ordering, timestamps, and schema versioning. Use this format for lossless backup and full restoration on another device.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.height(16.dp))
-                    Button(
+                    OutlinedButton(
                         onClick = {
-                            viewModel.exportData { jsonString ->
+                            viewModel.exportFullBackup { jsonString ->
                                 pendingExportJson = jsonString
+                                pendingExportSuccessMsg = "Full system backup successfully saved!"
                                 val dateStr = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
-                                exportFileLauncher.launch("linkview-backup-$dateStr.json")
+                                exportFileLauncher.launch("linkview-full-backup-$dateStr.json")
                             }
                         },
                         enabled = !uiState.isExporting && !uiState.isImporting
@@ -224,7 +308,7 @@ fun BackupScreen(
                             Icon(Icons.Default.FileDownload, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(8.dp))
                         }
-                        Text("Export to JSON")
+                        Text("Export System Backup")
                     }
                 }
             }
@@ -236,13 +320,13 @@ fun BackupScreen(
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
                     Text(
-                        text = "Import Backup",
+                        text = "Import Backup or Cards",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.SemiBold
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "Restore data from a previously exported JSON backup file with merge or replace options.",
+                        text = "Restore data from a JSON file or paste JSON directly. Automatically recognizes Full System Backups, single cards, or Readable Card arrays.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

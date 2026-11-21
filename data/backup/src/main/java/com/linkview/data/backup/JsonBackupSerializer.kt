@@ -2,6 +2,7 @@ package com.linkview.data.backup
 
 import com.linkview.core.model.BackupCard
 import com.linkview.core.model.BackupEnvelope
+import com.linkview.core.model.ReadableCard
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -21,6 +22,10 @@ class JsonBackupSerializer @Inject constructor() {
 
     fun encodeToString(envelope: BackupEnvelope): String {
         return json.encodeToString(BackupEnvelope.serializer(), envelope)
+    }
+
+    fun encodeReadableCardsToString(cards: List<ReadableCard>): String {
+        return json.encodeToString(ListSerializer(ReadableCard.serializer()), cards)
     }
 
     fun decodeFromString(jsonString: String): BackupEnvelope {

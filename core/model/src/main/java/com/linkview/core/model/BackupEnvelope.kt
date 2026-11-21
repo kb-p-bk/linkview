@@ -10,6 +10,13 @@ data class BackupEnvelope(
 )
 
 @Serializable
+data class ReadableCard(
+    val title: String,
+    val tags: List<String> = emptyList(),
+    val units: List<String> = emptyList()
+)
+
+@Serializable
 data class BackupCard(
     val id: String = "",
     val title: String,

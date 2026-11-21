@@ -7,4 +7,5 @@ class ExportCardsUseCase(
     private val backupRepository: BackupRepository
 ) {
     suspend operator fun invoke(): Result<String> = backupRepository.exportJson()
+    suspend fun exportHumanReadable(): Result<String> = backupRepository.exportHumanReadableJson()
 }
