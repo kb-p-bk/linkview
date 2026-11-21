@@ -22,9 +22,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-private val DEFAULT_CARD_TYPES = listOf("Person", "Event", "Place", "Institution", "Concept")
+private val DEFAULT_CARD_TYPES = listOf("Person", "Event", "Concept", "Place", "Source")
 
-@OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
+@OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 @HiltViewModel
 class CardsViewModel @Inject constructor(
     private val cardRepository: CardRepository,
@@ -77,13 +77,13 @@ class CardsViewModel @Inject constructor(
                 }
             }
             .onEach { results ->
-                _uiState.update { it.copy(searchResults = results, isLoading = false) }
+                _uiState.update { it.copy(searchResults = results, isLoading = false, displayLimit = 1000) }
             }
             .launchIn(viewModelScope)
     }
 
     fun onSearchQueryChanged(query: String) {
-        _uiState.update { it.copy(searchQuery = query, isLoading = query.isNotBlank()) }
+        _uiState.update { it.copy(searchQuery = query, isLoading = query.isNotBlank(), displayLimit = 1000) }
         searchQueryFlow.value = query
     }
 
@@ -105,16 +105,20 @@ class CardsViewModel @Inject constructor(
             } else {
                 updated.add(tag)
             }
-            state.copy(selectedTags = updated)
+            state.copy(selectedTags = updated, displayLimit = 1000)
         }
     }
 
     fun clearTagFilters() {
-        _uiState.update { it.copy(selectedTags = emptySet(), tagSearchQuery = "") }
+        _uiState.update { it.copy(selectedTags = emptySet(), tagSearchQuery = "", displayLimit = 1000) }
     }
 
     fun onTagSearchQueryChanged(query: String) {
         _uiState.update { it.copy(tagSearchQuery = query) }
+    }
+
+    fun loadMoreCards() {
+        _uiState.update { it.copy(displayLimit = it.displayLimit + 1000) }
     }
 
     fun resolveCardId(cardIdOrTitle: String): String {
@@ -130,7 +134,8 @@ class CardsViewModel @Inject constructor(
         _uiState.update { state ->
             state.copy(
                 selectedTags = state.selectedTags + trimmed,
-                tagSearchQuery = ""
+                tagSearchQuery = "",
+                displayLimit = 1000
             )
         }
     }

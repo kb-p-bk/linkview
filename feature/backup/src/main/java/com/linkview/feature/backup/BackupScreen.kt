@@ -3,11 +3,10 @@ package com.linkview.feature.backup
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -16,23 +15,29 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
+import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
@@ -58,6 +63,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.PopupProperties
+import com.linkview.core.ui.components.CompactSearchBar
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.linkview.core.model.ImportMode
@@ -67,7 +74,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BackupScreen(
     onNavigateBack: () -> Unit,
@@ -82,6 +89,8 @@ fun BackupScreen(
     var pendingExportSuccessMsg by remember { mutableStateOf("Backup successfully exported!") }
     var showPasteDialog by remember { mutableStateOf(false) }
     var pastedJsonText by remember { mutableStateOf("") }
+    var tagSearchQuery by remember { mutableStateOf("") }
+    var isTagDropdownExpanded by remember { mutableStateOf(false) }
 
     // SAF File Creator for Export
     val exportFileLauncher = rememberLauncherForActivityResult(
@@ -360,22 +369,101 @@ fun BackupScreen(
                             fontWeight = FontWeight.SemiBold
                         )
                         Spacer(modifier = Modifier.height(6.dp))
-                        FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
-                            modifier = Modifier.fillMaxWidth()
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            FilterChip(
-                                selected = uiState.selectedFilterTags.isEmpty(),
-                                onClick = { viewModel.clearFilterTags() },
-                                label = { Text("All") }
-                            )
-                            uiState.availableTags.forEach { tag ->
-                                FilterChip(
-                                    selected = uiState.selectedFilterTags.contains(tag),
-                                    onClick = { viewModel.toggleFilterTag(tag) },
-                                    label = { Text(tag) }
+                            // Tag Search Input with Autocomplete Dropdown
+                            Box {
+                                CompactSearchBar(
+                                    value = tagSearchQuery,
+                                    onValueChange = {
+                                        tagSearchQuery = it
+                                        isTagDropdownExpanded = it.isNotBlank()
+                                    },
+                                    placeholderText = "Filter tag...",
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Default.Tag,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp),
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    },
+                                    trailingIcon = {
+                                        if (tagSearchQuery.isNotEmpty()) {
+                                            IconButton(
+                                                onClick = {
+                                                    tagSearchQuery = ""
+                                                    isTagDropdownExpanded = false
+                                                },
+                                                modifier = Modifier.size(24.dp)
+                                            ) {
+                                                Icon(Icons.Default.Clear, contentDescription = "Clear tag query", modifier = Modifier.size(14.dp))
+                                            }
+                                        }
+                                    },
+                                    modifier = Modifier.widthIn(min = 120.dp, max = 160.dp)
                                 )
+
+                                val cleanQuery = tagSearchQuery.trim()
+                                val matchingTags = uiState.availableTags.filter { it.contains(cleanQuery, ignoreCase = true) }
+
+                                DropdownMenu(
+                                    expanded = isTagDropdownExpanded && matchingTags.isNotEmpty(),
+                                    onDismissRequest = { isTagDropdownExpanded = false },
+                                    properties = PopupProperties(focusable = false)
+                                ) {
+                                    matchingTags.take(8).forEach { tag ->
+                                        val isSelected = uiState.selectedFilterTags.contains(tag)
+                                        DropdownMenuItem(
+                                            text = { Text(tag) },
+                                            leadingIcon = if (isSelected) {
+                                                { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                                            } else null,
+                                            onClick = {
+                                                viewModel.toggleFilterTag(tag)
+                                                tagSearchQuery = ""
+                                                isTagDropdownExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Scrollable Tag Filter Chips in a single clean row
+                            Row(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                FilterChip(
+                                    selected = uiState.selectedFilterTags.isEmpty(),
+                                    onClick = { viewModel.clearFilterTags() },
+                                    label = { Text("All") }
+                                )
+
+                                val displayCandidateTags = if (tagSearchQuery.isBlank()) {
+                                    (uiState.selectedFilterTags + uiState.availableTags).distinct()
+                                } else {
+                                    (uiState.selectedFilterTags + uiState.availableTags.filter { it.contains(tagSearchQuery.trim(), ignoreCase = true) }).distinct()
+                                }
+
+                                displayCandidateTags.forEach { tag ->
+                                    val isSelected = uiState.selectedFilterTags.contains(tag)
+                                    FilterChip(
+                                        selected = isSelected,
+                                        onClick = { viewModel.toggleFilterTag(tag) },
+                                        label = { Text(tag) },
+                                        leadingIcon = if (isSelected) {
+                                            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                                        } else null
+                                    )
+                                }
                             }
                         }
                         Spacer(modifier = Modifier.height(14.dp))

@@ -13,7 +13,8 @@ data class CardsUiState(
     val allCards: List<Card> = emptyList(),
     val searchResults: List<SearchResultItem> = emptyList(),
     val selectedCardId: String? = null,
-    val isLoading: Boolean = false
+    val isLoading: Boolean = false,
+    val displayLimit: Int = 1000
 ) {
     val isSearching: Boolean get() = searchQuery.isNotBlank()
 
@@ -40,6 +41,12 @@ data class CardsUiState(
             }
         }
 
+    val displayedCards: List<Card>
+        get() = filteredCards.take(displayLimit)
+
+    val hasMoreCards: Boolean
+        get() = filteredCards.size > displayLimit
+
     val filteredSearchResults: List<SearchResultItem>
         get() = if (selectedTags.isEmpty()) {
             searchResults
@@ -49,4 +56,10 @@ data class CardsUiState(
                 selectedTags.all { selectedTag -> cardTagsLower.contains(selectedTag.lowercase()) }
             }
         }
+
+    val displayedSearchResults: List<SearchResultItem>
+        get() = filteredSearchResults.take(displayLimit)
+
+    val hasMoreSearchResults: Boolean
+        get() = filteredSearchResults.size > displayLimit
 }

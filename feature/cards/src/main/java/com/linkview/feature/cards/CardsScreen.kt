@@ -19,12 +19,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
@@ -38,6 +38,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -46,13 +47,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.PopupProperties
@@ -61,6 +63,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.linkview.core.model.Card as DomainCard
 import com.linkview.core.model.SearchResultItem
 import com.linkview.core.model.SearchScope
+import com.linkview.core.ui.components.CompactSearchBar
 import com.linkview.core.ui.components.HighlightedText
 
 /**
@@ -293,13 +296,15 @@ fun CardsHeader(
 /**
  * Responsive Cards Grid Content (Below Header).
  * Displays cards in rows of 1, 2, or 3+ depending on screen width.
+ * Automatically paginates cards (in batches of 1,000) to keep memory and rendering optimal.
  */
 @Composable
 fun CardsGridContent(
     uiState: CardsUiState,
     selectedCardId: String?,
     onCardClick: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onLoadMore: () -> Unit = {}
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val minCardSize = 220.dp
@@ -308,12 +313,32 @@ fun CardsGridContent(
         val availableWidth = maxWidth - padding
         val columns = maxOf(1, ((availableWidth + horizontalSpacing) / (minCardSize + horizontalSpacing)).toInt())
 
+        val listState = rememberLazyListState()
+
+        val shouldLoadMore = remember {
+            derivedStateOf {
+                val layoutInfo = listState.layoutInfo
+                val totalItems = layoutInfo.totalItemsCount
+                val lastVisibleItem = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+                totalItems > 0 && lastVisibleItem >= totalItems - 5
+            }
+        }
+
+        LaunchedEffect(shouldLoadMore.value) {
+            if (shouldLoadMore.value) {
+                val hasMore = if (uiState.isSearching) uiState.hasMoreSearchResults else uiState.hasMoreCards
+                if (hasMore) {
+                    onLoadMore()
+                }
+            }
+        }
+
         if (uiState.isLoading) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
             }
         } else if (uiState.isSearching) {
-            val searchResults = uiState.filteredSearchResults
+            val searchResults = uiState.displayedSearchResults
             if (searchResults.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
@@ -325,6 +350,7 @@ fun CardsGridContent(
             } else {
                 val rows = searchResults.chunked(columns)
                 LazyColumn(
+                    state = listState,
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -357,10 +383,47 @@ fun CardsGridContent(
                             }
                         }
                     }
+
+                    if (uiState.hasMoreSearchResults) {
+                        item {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 16.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Showing ${uiState.displayedSearchResults.size} of ${uiState.filteredSearchResults.size} results",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                FilledTonalButton(onClick = onLoadMore) {
+                                    Text("Load more")
+                                }
+                            }
+                        }
+                    } else if (uiState.filteredSearchResults.size > 1000) {
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 16.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "All ${uiState.filteredSearchResults.size} results loaded",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
                 }
             }
         } else {
-            val cards = uiState.filteredCards
+            val cards = uiState.displayedCards
             if (cards.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -380,6 +443,7 @@ fun CardsGridContent(
             } else {
                 val rows = cards.chunked(columns)
                 LazyColumn(
+                    state = listState,
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -408,6 +472,43 @@ fun CardsGridContent(
                             val emptySpaces = columns - rowCards.size
                             for (i in 0 until emptySpaces) {
                                 Spacer(modifier = Modifier.weight(1f))
+                            }
+                        }
+                    }
+
+                    if (uiState.hasMoreCards) {
+                        item {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 16.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Showing ${uiState.displayedCards.size} of ${uiState.filteredCards.size} cards",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                FilledTonalButton(onClick = onLoadMore) {
+                                    Text("Load more")
+                                }
+                            }
+                        }
+                    } else if (uiState.filteredCards.size > 1000) {
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 16.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "All ${uiState.filteredCards.size} cards loaded",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
                         }
                     }
@@ -453,7 +554,8 @@ fun CardsScreen(
             uiState = uiState,
             selectedCardId = selectedCardId,
             onCardClick = onCardClick,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
+            onLoadMore = { viewModel.loadMoreCards() }
         )
     }
 }
@@ -592,62 +694,6 @@ private fun SearchResultGridItem(
                         }
                     }
                 }
-            }
-        }
-    }
-}
-
-@Composable
-private fun CompactSearchBar(
-    value: String,
-    onValueChange: (String) -> Unit,
-    placeholderText: String,
-    leadingIcon: @Composable (() -> Unit)? = null,
-    trailingIcon: @Composable (() -> Unit)? = null,
-    modifier: Modifier = Modifier
-) {
-    Surface(
-        modifier = modifier.height(44.dp),
-        shape = RoundedCornerShape(22.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            if (leadingIcon != null) {
-                leadingIcon()
-                Spacer(modifier = Modifier.width(8.dp))
-            }
-            Box(
-                modifier = Modifier.weight(1f),
-                contentAlignment = Alignment.CenterStart
-            ) {
-                if (value.isEmpty()) {
-                    Text(
-                        text = placeholderText,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1
-                    )
-                }
-                BasicTextField(
-                    value = value,
-                    onValueChange = onValueChange,
-                    singleLine = true,
-                    textStyle = MaterialTheme.typography.bodyMedium.copy(
-                        color = MaterialTheme.colorScheme.onSurface
-                    ),
-                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-            if (trailingIcon != null) {
-                Spacer(modifier = Modifier.width(4.dp))
-                trailingIcon()
             }
         }
     }

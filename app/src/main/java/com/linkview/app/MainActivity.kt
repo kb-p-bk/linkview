@@ -186,6 +186,9 @@ private fun TabletResponsiveLayout(
                     selectedCardId = activeCardId,
                     onCardClick = { cardId ->
                         jumpToCard(cardId)
+                    },
+                    onLoadMore = {
+                        cardsViewModel.loadMoreCards()
                     }
                 )
             }
