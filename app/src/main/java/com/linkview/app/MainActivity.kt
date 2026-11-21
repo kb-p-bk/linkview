@@ -212,21 +212,23 @@ private fun TabletResponsiveLayout(
                             }
                         }
                         activeCardId != null -> {
-                            CardDetailScreen(
-                                cardId = activeCardId!!,
-                                showBackButton = cardJumpHistory.isNotEmpty(),
-                                onClose = {
-                                    activeCardId = null
-                                    cardJumpHistory.clear()
-                                },
-                                onNavigateBack = { handleTabletBack() },
-                                onEditCard = { cardId -> editingCardId = cardId },
-                                onNavigateToCard = { targetId -> jumpToCard(targetId) },
-                                onDeleteSuccess = {
-                                    activeCardId = null
-                                    cardJumpHistory.clear()
-                                }
-                            )
+                            androidx.compose.runtime.key(activeCardId) {
+                                CardDetailScreen(
+                                    cardId = activeCardId!!,
+                                    showBackButton = cardJumpHistory.isNotEmpty(),
+                                    onClose = {
+                                        activeCardId = null
+                                        cardJumpHistory.clear()
+                                    },
+                                    onNavigateBack = { handleTabletBack() },
+                                    onEditCard = { cardId -> editingCardId = cardId },
+                                    onNavigateToCard = { targetId -> jumpToCard(targetId) },
+                                    onDeleteSuccess = {
+                                        activeCardId = null
+                                        cardJumpHistory.clear()
+                                    }
+                                )
+                            }
                         }
                     }
                 }

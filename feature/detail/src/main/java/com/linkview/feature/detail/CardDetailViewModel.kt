@@ -28,7 +28,15 @@ class CardDetailViewModel @Inject constructor(
 
     fun loadCard(cardId: String) {
         if (cardId.isBlank()) return
-        _uiState.update { it.copy(cardId = cardId, isLoading = true, errorMessage = null) }
+        _uiState.update {
+            it.copy(
+                cardId = cardId,
+                isLoading = true,
+                errorMessage = null,
+                deleteSuccess = false,
+                isConfirmingDelete = false
+            )
+        }
 
         observeJob?.cancel()
         observeJob = viewModelScope.launch {
@@ -64,6 +72,10 @@ class CardDetailViewModel @Inject constructor(
 
     fun cancelDelete() {
         _uiState.update { it.copy(isConfirmingDelete = false) }
+    }
+
+    fun resetDeleteSuccess() {
+        _uiState.update { it.copy(deleteSuccess = false) }
     }
 
     fun confirmDelete() {

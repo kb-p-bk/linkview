@@ -67,6 +67,7 @@ fun CardDetailScreen(
 
     LaunchedEffect(uiState.deleteSuccess) {
         if (uiState.deleteSuccess) {
+            viewModel.resetDeleteSuccess()
             onDeleteSuccess()
         }
     }
