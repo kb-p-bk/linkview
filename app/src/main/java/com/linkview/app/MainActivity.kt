@@ -18,6 +18,11 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.VerticalDivider
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -194,14 +199,25 @@ private fun TabletResponsiveLayout(
                         .weight(0.62f)
                         .fillMaxHeight()
                 ) {
-                    when {
-                        isShowingBackup -> {
-                            BackupScreen(
-                                onNavigateBack = { isShowingBackup = false }
-                            )
-                        }
-                        editingCardId != null -> {
-                            androidx.compose.runtime.key(editingCardId) {
+                    AnimatedContent(
+                        targetState = when {
+                            isShowingBackup -> "backup"
+                            editingCardId != null -> "editor_$editingCardId"
+                            activeCardId != null -> "detail_$activeCardId"
+                            else -> "empty"
+                        },
+                        transitionSpec = {
+                            fadeIn(animationSpec = tween(180)) togetherWith fadeOut(animationSpec = tween(150))
+                        },
+                        label = "RightPaneContent"
+                    ) { target ->
+                        when {
+                            target == "backup" -> {
+                                BackupScreen(
+                                    onNavigateBack = { isShowingBackup = false }
+                                )
+                            }
+                            target.startsWith("editor_") -> {
                                 CardEditorScreen(
                                     cardId = editingCardId!!.ifEmpty { null },
                                     onNavigateBack = { editingCardId = null },
@@ -210,9 +226,7 @@ private fun TabletResponsiveLayout(
                                     }
                                 )
                             }
-                        }
-                        activeCardId != null -> {
-                            androidx.compose.runtime.key(activeCardId) {
+                            target.startsWith("detail_") -> {
                                 CardDetailScreen(
                                     cardId = activeCardId!!,
                                     showBackButton = cardJumpHistory.isNotEmpty(),

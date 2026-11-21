@@ -130,7 +130,7 @@ fun CardEditorScreen(
             )
         }
     ) { innerPadding ->
-        if (uiState.isLoading) {
+        if (uiState.isLoading && uiState.title.isEmpty() && uiState.cardId != null) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
             }

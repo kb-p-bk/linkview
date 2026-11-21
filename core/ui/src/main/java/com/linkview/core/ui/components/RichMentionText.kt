@@ -20,9 +20,14 @@ fun RichMentionText(
     modifier: Modifier = Modifier,
     style: TextStyle = MaterialTheme.typography.bodyLarge
 ) {
+    val codeBg = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
     val tokens = MentionTokenizer.extractTokens(rawText)
     if (tokens.isEmpty()) {
-        Text(text = rawText, style = style, modifier = modifier)
+        Text(
+            text = parseMarkdownToAnnotatedString(rawText, codeBg),
+            style = style,
+            modifier = modifier
+        )
         return
     }
 
@@ -37,7 +42,7 @@ fun RichMentionText(
                 val plainSegment = rawText.substring(currentIndex, token.startIndex)
                 if (plainSegment.isNotEmpty()) {
                     Text(
-                        text = plainSegment,
+                        text = parseMarkdownToAnnotatedString(plainSegment, codeBg),
                         style = style,
                         modifier = Modifier.align(Alignment.CenterVertically)
                     )
@@ -55,7 +60,7 @@ fun RichMentionText(
             val trailing = rawText.substring(currentIndex)
             if (trailing.isNotEmpty()) {
                 Text(
-                    text = trailing,
+                    text = parseMarkdownToAnnotatedString(trailing, codeBg),
                     style = style,
                     modifier = Modifier.align(Alignment.CenterVertically)
                 )

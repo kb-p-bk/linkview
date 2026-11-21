@@ -95,7 +95,6 @@ class CardEditorViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            _uiState.value = CardEditorUiState(cardId = cardId, isLoading = true, allExistingTags = tagsSnapshot)
             val cardWithContext = getCardDetailUseCase.getOnce(cardId)
             if (cardWithContext != null) {
                 val editableUnits = if (cardWithContext.authoredUnits.isNotEmpty()) {
