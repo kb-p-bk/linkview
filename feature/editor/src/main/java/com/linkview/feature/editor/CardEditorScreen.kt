@@ -31,6 +31,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -71,6 +73,7 @@ fun CardEditorScreen(
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    var isTagDropdownOpen by remember { mutableStateOf(false) }
 
     DisposableEffect(cardId) {
         viewModel.loadCard(cardId)
@@ -174,7 +177,7 @@ fun CardEditorScreen(
                 value = uiState.title,
                 onValueChange = { viewModel.onTitleChanged(it) },
                 label = { Text("Card Title") },
-                placeholder = { Text("e.g. Publius Rutilius Rufus") },
+                placeholder = { Text("Title") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 isError = uiState.errorMessage != null && uiState.title.isBlank()
@@ -226,21 +229,60 @@ fun CardEditorScreen(
                     }
                 }
 
-                // Inline Tag Input
+                // Inline Tag Input with Autocomplete
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    OutlinedTextField(
-                        value = uiState.tagInputText,
-                        onValueChange = { viewModel.onTagInputChanged(it) },
-                        placeholder = { Text("Add tag (e.g. Late Republic, Consul)...") },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f)
-                    )
+                    Box(modifier = Modifier.weight(1f)) {
+                        OutlinedTextField(
+                            value = uiState.tagInputText,
+                            onValueChange = {
+                                viewModel.onTagInputChanged(it)
+                                isTagDropdownOpen = it.isNotBlank()
+                            },
+                            placeholder = { Text("Search & add tag...", maxLines = 1) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        val inputQuery = uiState.tagInputText.trim()
+                        val matchingExisting = uiState.allExistingTags
+                            .filter { it.contains(inputQuery, ignoreCase = true) && !uiState.tags.any { t -> t.equals(it, ignoreCase = true) } }
+                        val isNewTag = inputQuery.isNotBlank() && !uiState.allExistingTags.any { it.equals(inputQuery, ignoreCase = true) }
+
+                        DropdownMenu(
+                            expanded = isTagDropdownOpen && (matchingExisting.isNotEmpty() || isNewTag),
+                            onDismissRequest = { isTagDropdownOpen = false }
+                        ) {
+                            if (isNewTag) {
+                                DropdownMenuItem(
+                                    text = { Text("+ Add \"$inputQuery\"") },
+                                    leadingIcon = { Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                                    onClick = {
+                                        viewModel.addTag(inputQuery)
+                                        isTagDropdownOpen = false
+                                    }
+                                )
+                            }
+                            matchingExisting.take(8).forEach { tag ->
+                                DropdownMenuItem(
+                                    text = { Text(tag) },
+                                    onClick = {
+                                        viewModel.addTag(tag)
+                                        isTagDropdownOpen = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+
                     Button(
-                        onClick = { viewModel.addTag(uiState.tagInputText) },
+                        onClick = {
+                            viewModel.addTag(uiState.tagInputText)
+                            isTagDropdownOpen = false
+                        },
                         enabled = uiState.tagInputText.isNotBlank()
                     ) {
                         Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
