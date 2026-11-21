@@ -133,7 +133,6 @@ class BackupRepositoryImpl @Inject constructor(
                 val now = System.currentTimeMillis()
                 val titleToIdMap = mutableMapOf<String, String>()
                 val processedTitles = mutableSetOf<String>()
-                val skippedCardIds = mutableSetOf<String>()
 
                 // Pass 1: Upsert all explicitly declared cards in envelope first
                 for (card in envelope.cards) {
@@ -143,32 +142,38 @@ class BackupRepositoryImpl @Inject constructor(
                     val lowerTitle = cardTitle.lowercase()
                     val existingCard = cardDao.getCardByExactTitle(collectionId, cardTitle)
 
-                    if (mode == ImportMode.SYNC_MERGE && existingCard != null) {
-                        // Compare updatedAt: if local card is newer or equal, preserve local card
-                        val incomingUpdatedAt = card.updatedAt
-                        val localUpdatedAt = existingCard.updatedAt
-                        if (incomingUpdatedAt > 0L && localUpdatedAt >= incomingUpdatedAt) {
-                            titleToIdMap[lowerTitle] = existingCard.id
-                            skippedCardIds.add(existingCard.id)
-                            continue
-                        }
-                    }
-
                     val cardId = when {
-                        card.id.isNotBlank() -> card.id
                         existingCard != null -> existingCard.id
+                        card.id.isNotBlank() -> card.id
                         titleToIdMap.containsKey(lowerTitle) -> titleToIdMap[lowerTitle]!!
                         else -> UUID.randomUUID().toString()
                     }
                     titleToIdMap[lowerTitle] = cardId
 
-                    val createdAt = if (card.createdAt > 0L) card.createdAt else (existingCard?.createdAt ?: now)
-                    val updatedAt = if (card.updatedAt > 0L) card.updatedAt else now
+                    val mergedTags: List<String>
+                    val mergedType: String?
+                    val createdAt: Long
+                    val updatedAt: Long
+
+                    if (mode == ImportMode.SYNC_MERGE && existingCard != null) {
+                        val localTags = existingCard.toDomain().allTags
+                        val incomingTags = card.allTags
+                        mergedTags = (localTags + incomingTags).distinct()
+                        mergedType = existingCard.type?.ifBlank { null } ?: card.type?.trim()?.ifBlank { null }
+                        createdAt = if (existingCard.createdAt > 0L) existingCard.createdAt else (if (card.createdAt > 0L) card.createdAt else now)
+                        updatedAt = maxOf(existingCard.updatedAt, card.updatedAt, now)
+                    } else {
+                        mergedTags = card.allTags
+                        mergedType = card.type?.trim()?.ifBlank { null }
+                        createdAt = if (card.createdAt > 0L) card.createdAt else (existingCard?.createdAt ?: now)
+                        updatedAt = if (card.updatedAt > 0L) card.updatedAt else now
+                    }
+
                     val domainCard = Card(
                         id = cardId,
                         title = cardTitle,
-                        tags = card.allTags,
-                        type = card.type?.trim()?.ifBlank { null },
+                        tags = mergedTags,
+                        type = mergedType,
                         createdAt = createdAt,
                         updatedAt = updatedAt,
                         collectionId = collectionId
@@ -185,7 +190,7 @@ class BackupRepositoryImpl @Inject constructor(
                         cardDao.insertCardTags(tagEntities)
                     }
 
-                    if (mode == ImportMode.MERGE || mode == ImportMode.SYNC_MERGE) {
+                    if (mode == ImportMode.MERGE) {
                         contextUnitDao.deleteUnitsForCard(cardId)
                     }
                 }
@@ -195,11 +200,6 @@ class BackupRepositoryImpl @Inject constructor(
                     val cardTitle = card.title.trim()
                     if (cardTitle.isEmpty()) continue
                     val cardId = titleToIdMap[cardTitle.lowercase()] ?: card.id.ifBlank { null } ?: continue
-
-                    // If local card was newer in SYNC_MERGE, keep local units and skip overwriting from file
-                    if (skippedCardIds.contains(cardId)) {
-                        continue
-                    }
 
                     // Support both structured contextUnits and shorthand units: List<String>
                     val rawUnits = when {
@@ -217,8 +217,41 @@ class BackupRepositoryImpl @Inject constructor(
                         else -> emptyList()
                     }
 
-                    if (rawUnits.isNotEmpty()) {
-                        val unitEntities = rawUnits.map { unit ->
+                    val unitsToProcess = if (mode == ImportMode.SYNC_MERGE) {
+                        val existingUnits = contextUnitDao.getUnitsForCard(cardId)
+                        if (existingUnits.isEmpty()) {
+                            rawUnits
+                        } else {
+                            val existingIds = existingUnits.map { it.id }.toSet()
+                            val existingTexts = existingUnits.map { it.rawText.trim() }.toSet()
+                            var nextSortOrder = (existingUnits.maxOfOrNull { it.sortOrder } ?: -1) + 1
+
+                            val newUnits = mutableListOf<com.linkview.core.model.BackupUnit>()
+                            for (incoming in rawUnits) {
+                                val trimmed = incoming.rawText.trim()
+                                val matchesExisting = existingIds.contains(incoming.id) || existingTexts.contains(trimmed)
+                                if (!matchesExisting) {
+                                    val newId = if (incoming.id.isNotBlank() && !existingIds.contains(incoming.id)) {
+                                        incoming.id
+                                    } else {
+                                        UUID.randomUUID().toString()
+                                    }
+                                    newUnits.add(
+                                        incoming.copy(
+                                            id = newId,
+                                            sortOrder = nextSortOrder++
+                                        )
+                                    )
+                                }
+                            }
+                            newUnits
+                        }
+                    } else {
+                        rawUnits
+                    }
+
+                    if (unitsToProcess.isNotEmpty()) {
+                        val unitEntities = unitsToProcess.map { unit ->
                             ContextUnitEntity(
                                 id = unit.id,
                                 sourceCardId = cardId,
@@ -231,7 +264,7 @@ class BackupRepositoryImpl @Inject constructor(
                         unitsImported += unitEntities.size
 
                         val references = mutableListOf<UnitReferenceEntity>()
-                        for (unit in rawUnits) {
+                        for (unit in unitsToProcess) {
                             val extracted = MentionTokenizer.extractReferences(unit.rawText)
                             val allRefs = (extracted + unit.references).distinct()
                             for (targetRef in allRefs) {

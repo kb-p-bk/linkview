@@ -618,7 +618,7 @@ fun BackupScreen(
                         ) {
                             Column(modifier = Modifier.padding(10.dp)) {
                                 Text("1. Sync Merge (Recommended)", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                                Text("Auto-resolves edits using timestamps: only incoming cards with newer edits update local cards; your newer local edits are preserved.", style = MaterialTheme.typography.bodySmall)
+                                Text("Combines edits across devices: unions context units without losing existing notes, merges tags, and wires any new references.", style = MaterialTheme.typography.bodySmall)
                             }
                         }
                         Surface(
