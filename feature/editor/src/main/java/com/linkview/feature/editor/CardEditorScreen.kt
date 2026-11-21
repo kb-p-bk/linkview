@@ -1,6 +1,11 @@
 package com.linkview.feature.editor
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -11,17 +16,18 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -29,6 +35,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Warning
@@ -54,12 +61,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.PopupProperties
@@ -350,22 +359,24 @@ fun CardEditorScreen(
 
             // Context Units inputs
             uiState.units.forEachIndexed { index, unit ->
-                ContextUnitEditorRow(
-                    index = index,
-                    unit = unit,
-                    totalUnits = uiState.units.size,
-                    isMentionActive = uiState.activeUnitIndex == index,
-                    mentionQuery = uiState.activeMentionQuery,
-                    suggestions = if (uiState.activeUnitIndex == index) uiState.mentionSuggestions else emptyList(),
-                    onTextChanged = { text, cursor ->
-                        viewModel.onUnitTextChanged(index, text, cursor)
-                    },
-                    onMoveUp = { viewModel.moveContextUnit(index, index - 1) },
-                    onMoveDown = { viewModel.moveContextUnit(index, index + 1) },
-                    onDelete = { viewModel.removeContextUnit(index) },
-                    onSelectMention = { card -> viewModel.selectMention(card) },
-                    onQuickCreateMention = { title -> viewModel.quickCreateAndSelectMention(title) }
-                )
+                key(unit.id) {
+                    ContextUnitEditorRow(
+                        index = index,
+                        unit = unit,
+                        totalUnits = uiState.units.size,
+                        isMentionActive = uiState.activeUnitIndex == index,
+                        mentionQuery = uiState.activeMentionQuery,
+                        suggestions = if (uiState.activeUnitIndex == index) uiState.mentionSuggestions else emptyList(),
+                        onTextChanged = { text, cursor ->
+                            viewModel.onUnitTextChanged(index, text, cursor)
+                        },
+                        onMoveUp = { viewModel.moveContextUnit(index, index - 1) },
+                        onMoveDown = { viewModel.moveContextUnit(index, index + 1) },
+                        onDelete = { viewModel.removeContextUnit(index) },
+                        onSelectMention = { card -> viewModel.selectMention(card) },
+                        onQuickCreateMention = { title -> viewModel.quickCreateAndSelectMention(title) }
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(32.dp))
@@ -373,6 +384,7 @@ fun CardEditorScreen(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ContextUnitEditorRow(
     index: Int,
@@ -388,6 +400,14 @@ private fun ContextUnitEditorRow(
     onSelectMention: (Card) -> Unit,
     onQuickCreateMention: (String) -> Unit
 ) {
+    val bringIntoViewRequester = remember { BringIntoViewRequester() }
+
+    LaunchedEffect(isMentionActive) {
+        if (isMentionActive) {
+            bringIntoViewRequester.bringIntoView()
+        }
+    }
+
     // Keep local TextFieldValue to track cursor position accurately
     var textFieldValue by remember(unit.id) {
         mutableStateOf(TextFieldValue(unit.rawText, TextRange(unit.rawText.length)))
@@ -403,10 +423,13 @@ private fun ContextUnitEditorRow(
     }
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .bringIntoViewRequester(bringIntoViewRequester),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
+            // Header Row: Unit number and Actions (Move Up, Move Down, Delete)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -417,51 +440,71 @@ private fun ContextUnitEditorRow(
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Row {
-                    if (index > 0) {
-                        IconButton(onClick = onMoveUp, modifier = Modifier.size(32.dp)) {
-                            Icon(Icons.Default.ArrowUpward, contentDescription = "Move Up", modifier = Modifier.size(16.dp))
-                        }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = onMoveUp,
+                        enabled = index > 0,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.ArrowUpward,
+                            contentDescription = "Move Up",
+                            modifier = Modifier.size(18.dp),
+                            tint = if (index > 0) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+                        )
                     }
-                    if (index < totalUnits - 1) {
-                        IconButton(onClick = onMoveDown, modifier = Modifier.size(32.dp)) {
-                            Icon(Icons.Default.ArrowDownward, contentDescription = "Move Down", modifier = Modifier.size(16.dp))
-                        }
+                    IconButton(
+                        onClick = onMoveDown,
+                        enabled = index < totalUnits - 1,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.ArrowDownward,
+                            contentDescription = "Move Down",
+                            modifier = Modifier.size(18.dp),
+                            tint = if (index < totalUnits - 1) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+                        )
                     }
-                    IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Default.Delete, contentDescription = "Delete Unit", modifier = Modifier.size(16.dp))
+                    IconButton(
+                        onClick = onDelete,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = "Delete Unit",
+                            modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.error
+                        )
                     }
                 }
             }
 
-            OutlinedTextField(
-                value = textFieldValue,
-                onValueChange = { newValue ->
-                    textFieldValue = newValue
-                    onTextChanged(newValue.text, newValue.selection.end)
-                },
-                placeholder = { Text("Write note... type @ to mention another card") },
-                modifier = Modifier.fillMaxWidth(),
-                minLines = 2
-            )
-
-            // Anchored mention suggestions popup / box
-            AnimatedVisibility(visible = isMentionActive) {
+            // Anchored mention suggestions popup ABOVE the text field so it is never hidden by keyboard
+            AnimatedVisibility(
+                visible = isMentionActive,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 8.dp),
-                    shape = RoundedCornerShape(8.dp),
+                        .padding(top = 8.dp, bottom = 4.dp),
+                    shape = RoundedCornerShape(12.dp),
                     color = MaterialTheme.colorScheme.surface,
-                    tonalElevation = 4.dp,
-                    shadowElevation = 2.dp
+                    tonalElevation = 6.dp,
+                    shadowElevation = 4.dp
                 ) {
-                    Column(modifier = Modifier.padding(8.dp)) {
+                    Column(
+                        modifier = Modifier
+                            .padding(8.dp)
+                            .heightIn(max = 200.dp)
+                            .verticalScroll(rememberScrollState())
+                    ) {
                         Text(
-                            text = "Link to card:",
+                            text = if (mentionQuery.isNullOrBlank()) "Link to card:" else "Link to card (matching '@$mentionQuery'):",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(bottom = 4.dp)
+                            modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
                         )
 
                         suggestions.forEach { card ->
@@ -520,6 +563,19 @@ private fun ContextUnitEditorRow(
                     }
                 }
             }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            OutlinedTextField(
+                value = textFieldValue,
+                onValueChange = { newValue ->
+                    textFieldValue = newValue
+                    onTextChanged(newValue.text, newValue.selection.end)
+                },
+                placeholder = { Text("Write note... type @ to mention another card") },
+                modifier = Modifier.fillMaxWidth(),
+                minLines = 2
+            )
         }
     }
 }

@@ -196,7 +196,12 @@ class CardEditorViewModel @Inject constructor(
                 val item = updated.removeAt(fromIndex)
                 updated.add(toIndex, item)
             }
-            state.copy(units = updated)
+            val newActiveIndex = when (state.activeUnitIndex) {
+                fromIndex -> toIndex
+                toIndex -> fromIndex
+                else -> state.activeUnitIndex
+            }
+            state.copy(units = updated, activeUnitIndex = newActiveIndex)
         }
     }
 
