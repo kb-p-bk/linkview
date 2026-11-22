@@ -167,6 +167,19 @@ class CardEditorViewModel @Inject constructor(
         }
     }
 
+    fun moveTag(fromIndex: Int, toIndex: Int) {
+        _uiState.update { state ->
+            val updated = state.tags.toMutableList()
+            if (fromIndex in updated.indices && toIndex in updated.indices && fromIndex != toIndex) {
+                val item = updated.removeAt(fromIndex)
+                updated.add(toIndex, item)
+                state.copy(tags = updated)
+            } else {
+                state
+            }
+        }
+    }
+
     fun addContextUnit() {
         _uiState.update { state ->
             state.copy(units = state.units + EditableUnit())

@@ -89,14 +89,27 @@ class CardDetailViewModel @Inject constructor(
     }
 
     companion object {
-        private val scrollPositions = ConcurrentHashMap<String, Int>()
+        private val contextScrollPositions = ConcurrentHashMap<String, Int>()
+        private val extraContextScrollPositions = ConcurrentHashMap<String, Int>()
+        private val selectedTabs = ConcurrentHashMap<String, String>()
     }
 
-    fun getScrollPosition(cardId: String): Int = scrollPositions[cardId] ?: 0
+    fun getScrollPosition(cardId: String, tab: String = "CONTEXT"): Int =
+        if (tab == "EXTRA_CONTEXT") extraContextScrollPositions[cardId] ?: 0
+        else contextScrollPositions[cardId] ?: 0
 
-    fun saveScrollPosition(cardId: String, position: Int) {
+    fun saveScrollPosition(cardId: String, tab: String, position: Int) {
         if (cardId.isNotBlank() && position >= 0) {
-            scrollPositions[cardId] = position
+            if (tab == "EXTRA_CONTEXT") extraContextScrollPositions[cardId] = position
+            else contextScrollPositions[cardId] = position
+        }
+    }
+
+    fun getSelectedTab(cardId: String): String = selectedTabs[cardId] ?: "CONTEXT"
+
+    fun saveSelectedTab(cardId: String, tab: String) {
+        if (cardId.isNotBlank()) {
+            selectedTabs[cardId] = tab
         }
     }
 

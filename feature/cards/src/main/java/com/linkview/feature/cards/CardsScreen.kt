@@ -543,34 +543,6 @@ fun CardsHeader(
                 }
             }
 
-            // Row 3: Scope Filter Chips (only when actively searching)
-            if (uiState.isSearching) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    SearchScope.entries.forEach { scope ->
-                        FilterChip(
-                            selected = uiState.effectiveScope == scope,
-                            onClick = {
-                                if (uiState.parsedScope != null) {
-                                    val clean = uiState.cleanSearchQuery
-                                    when (scope) {
-                                        SearchScope.TITLE_ONLY -> onSearchQueryChanged("title:$clean")
-                                        SearchScope.CONTEXT_ONLY -> onSearchQueryChanged("context:$clean")
-                                        SearchScope.TITLE_AND_CONTEXT -> onSearchQueryChanged(clean)
-                                    }
-                                } else {
-                                    onScopeSelected(scope)
-                                }
-                            },
-                            label = { Text(scope.displayName) }
-                        )
-                    }
-                }
-            }
         }
     }
 }

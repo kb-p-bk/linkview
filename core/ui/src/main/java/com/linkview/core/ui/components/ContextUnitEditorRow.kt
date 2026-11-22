@@ -76,10 +76,6 @@ fun ContextUnitEditorRow(
 ) {
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
 
-    LaunchedEffect(Unit) {
-        bringIntoViewRequester.bringIntoView()
-    }
-
     LaunchedEffect(isMentionActive) {
         if (isMentionActive) {
             bringIntoViewRequester.bringIntoView()

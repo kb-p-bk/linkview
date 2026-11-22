@@ -9,6 +9,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -72,8 +73,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -231,42 +235,13 @@ fun CardEditorScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
-                // Selected Tag Chips
+                // Selected Tag Chips (Reorderable with long press and movement)
                 if (uiState.tags.isNotEmpty()) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        uiState.tags.forEach { tag ->
-                            Surface(
-                                shape = RoundedCornerShape(16.dp),
-                                color = MaterialTheme.colorScheme.primaryContainer
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(start = 10.dp, end = 4.dp, top = 2.dp, bottom = 2.dp)
-                                ) {
-                                    Text(
-                                        text = tag,
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                                    )
-                                    IconButton(
-                                        onClick = { viewModel.removeTag(tag) },
-                                        modifier = Modifier.size(24.dp)
-                                    ) {
-                                        Icon(
-                                            Icons.Default.Close,
-                                            contentDescription = "Remove tag",
-                                            modifier = Modifier.size(14.dp)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    ReorderableTagChips(
+                        tags = uiState.tags,
+                        onRemoveTag = { viewModel.removeTag(it) },
+                        onMoveTag = { from, to -> viewModel.moveTag(from, to) }
+                    )
                 }
 
                 // Inline Tag Input with Autocomplete
@@ -484,6 +459,120 @@ fun CardEditorScreen(
         }
     }
 }
+}
+
+@Composable
+private fun ReorderableTagChips(
+    tags: List<String>,
+    onRemoveTag: (String) -> Unit,
+    onMoveTag: (fromIndex: Int, toIndex: Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var draggedIndex by remember { mutableStateOf<Int?>(null) }
+    var dragOffset by remember { mutableFloatStateOf(0f) }
+    val itemWidths = remember { mutableMapOf<Int, Int>() }
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        tags.forEachIndexed { index, tag ->
+            val isBeingDragged = draggedIndex == index
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = if (isBeingDragged) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.primaryContainer
+                },
+                shadowElevation = if (isBeingDragged) 8.dp else 0.dp,
+                modifier = Modifier
+                    .zIndex(if (isBeingDragged) 10f else 1f)
+                    .graphicsLayer {
+                        if (isBeingDragged) {
+                            translationX = dragOffset
+                            scaleX = 1.08f
+                            scaleY = 1.08f
+                        }
+                    }
+                    .onGloballyPositioned { coordinates ->
+                        itemWidths[index] = coordinates.size.width
+                    }
+                    .pointerInput(tags, index) {
+                        detectDragGesturesAfterLongPress(
+                            onDragStart = {
+                                draggedIndex = index
+                                dragOffset = 0f
+                            },
+                            onDrag = { change, dragAmount ->
+                                change.consume()
+                                val currentIdx = draggedIndex ?: return@detectDragGesturesAfterLongPress
+                                dragOffset += dragAmount.x
+
+                                val currentWidth = itemWidths[currentIdx] ?: 100
+                                if (dragOffset > 0 && currentIdx < tags.size - 1) {
+                                    val nextWidth = itemWidths[currentIdx + 1] ?: currentWidth
+                                    val threshold = nextWidth * 0.5f
+                                    if (dragOffset > threshold) {
+                                        onMoveTag(currentIdx, currentIdx + 1)
+                                        draggedIndex = currentIdx + 1
+                                        dragOffset -= nextWidth
+                                    }
+                                } else if (dragOffset < 0 && currentIdx > 0) {
+                                    val prevWidth = itemWidths[currentIdx - 1] ?: currentWidth
+                                    val threshold = -(prevWidth * 0.5f)
+                                    if (dragOffset < threshold) {
+                                        onMoveTag(currentIdx, currentIdx - 1)
+                                        draggedIndex = currentIdx - 1
+                                        dragOffset += prevWidth
+                                    }
+                                }
+                            },
+                            onDragEnd = {
+                                draggedIndex = null
+                                dragOffset = 0f
+                            },
+                            onDragCancel = {
+                                draggedIndex = null
+                                dragOffset = 0f
+                            }
+                        )
+                    }
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(start = 10.dp, end = 4.dp, top = 2.dp, bottom = 2.dp)
+                ) {
+                    Text(
+                        text = tag,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (isBeingDragged) {
+                            MaterialTheme.colorScheme.onPrimary
+                        } else {
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        }
+                    )
+                    IconButton(
+                        onClick = { onRemoveTag(tag) },
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = "Remove tag",
+                            tint = if (isBeingDragged) {
+                                MaterialTheme.colorScheme.onPrimary
+                            } else {
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            },
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
 }
 
 

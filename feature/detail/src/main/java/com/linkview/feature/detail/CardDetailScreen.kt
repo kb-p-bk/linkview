@@ -103,7 +103,12 @@ fun CardDetailScreen(
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
     var showJsonDialog by remember { mutableStateOf(false) }
-    var selectedContextTab by remember(cardId) { mutableStateOf(ContextTab.CONTEXT) }
+    var selectedContextTab by rememberSaveable(cardId) {
+        mutableStateOf(
+            if (viewModel.getSelectedTab(cardId) == ContextTab.EXTRA_CONTEXT.name) ContextTab.EXTRA_CONTEXT
+            else ContextTab.CONTEXT
+        )
+    }
     var searchQuery by rememberSaveable(cardId) { mutableStateOf("") }
 
     LaunchedEffect(cardId) {
@@ -121,17 +126,19 @@ fun CardDetailScreen(
         viewModel.cancelEditingUnit()
     }
 
-    val initialScroll = remember(cardId) { viewModel.getScrollPosition(cardId) }
-    val scrollState = rememberSaveable(cardId, saver = ScrollState.Saver) {
+    val initialScroll = remember(cardId, selectedContextTab) {
+        viewModel.getScrollPosition(cardId, selectedContextTab.name)
+    }
+    val scrollState = rememberSaveable(cardId, selectedContextTab, saver = ScrollState.Saver) {
         ScrollState(initial = initialScroll)
     }
 
-    LaunchedEffect(scrollState.value) {
-        viewModel.saveScrollPosition(cardId, scrollState.value)
+    LaunchedEffect(scrollState.value, selectedContextTab) {
+        viewModel.saveScrollPosition(cardId, selectedContextTab.name, scrollState.value)
     }
 
-    LaunchedEffect(cardId, uiState.cardWithContext) {
-        val targetPos = viewModel.getScrollPosition(cardId)
+    LaunchedEffect(cardId, selectedContextTab, uiState.cardWithContext) {
+        val targetPos = viewModel.getScrollPosition(cardId, selectedContextTab.name)
         if (targetPos > 0 && scrollState.value != targetPos) {
             scrollState.scrollTo(targetPos)
         }
@@ -321,7 +328,10 @@ fun CardDetailScreen(
                         } else {
                             MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                         },
-                        modifier = Modifier.clickable { selectedContextTab = ContextTab.CONTEXT }
+                        modifier = Modifier.clickable {
+                            selectedContextTab = ContextTab.CONTEXT
+                            viewModel.saveSelectedTab(cardId, ContextTab.CONTEXT.name)
+                        }
                     ) {
                         Text(
                             text = "Context ($contextCountLabel)",
@@ -355,6 +365,7 @@ fun CardDetailScreen(
                                 viewModel.cancelEditingUnit()
                             }
                             selectedContextTab = ContextTab.EXTRA_CONTEXT
+                            viewModel.saveSelectedTab(cardId, ContextTab.EXTRA_CONTEXT.name)
                         }
                     ) {
                         Text(
